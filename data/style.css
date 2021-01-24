@@ -1,0 +1,35 @@
+body{
+    margin: 0 10px O O;
+}
+.container {
+    max-width: 450px;
+    padding: 0;
+}
+.row {
+    flex-direction: row;
+    margin-left: -1.0rem;
+    width: calc(100% + 2.0rem);
+}
+.row .column {
+    margin-bottom: inherit;
+    padding: 0 1.0rem;
+}
+.title {
+    text-align: center;
+}
+.remote .button {
+    width: 100%;
+}
+.footer {
+    color: rgb(180, 180, 180);
+}
+@media (max-width: 450px) { 
+    .row {
+        flex-direction: column;
+    }
+    .row .column.column-33, .row .column.column-34 {
+        width: 100%;
+        max-width: 100%;
+        flex: 0;
+    }
+}

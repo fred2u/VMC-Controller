@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>VMC Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"charset="UTF-8" />
+    <link rel="stylesheet" type="text/css" href="milligram.min.css">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script type="text/javascript" src="script.js"></script>
+</head>
+<body>
+    <div class="container title">
+        <h3>VMC Controller</h3>
+    </div>
+    <div class="container mode">
+        <p>Current mode: <span id="mode"></span></p>
+    </div>
+    <div class="container remote">
+        <div class="row">
+            <div class="column column-33"><button onclick="send('default')" class="button button-outline" href="#">Default</button></div>
+            <div class="column column-33"><button onclick="send('auto')" class="button button-outline" href="#">Automatique</button></div>
+        </div>
+        <div class="row">
+            <div class="column column-33"><button onclick="send('low')" class="button button-outline" href="#">Low</button></div>
+            <div class="column column-33"><button onclick="send('medium')" class="button button-outline" href="#">Medium</button></div>
+            <div class="column column-33"><button onclick="send('high')" class="button button-outline" href="#">High</button></div>
+        </div>
+        <div class="row">
+            <div class="column column-33"><button onclick="send('max1')" class="button button-outline" href="#">Max 15 min</button></div>
+            <div class="column column-33"><button onclick="send('max2')" class="button button-outline" href="#">Max 30 min</button></div>
+            <div class="column column-33"><button onclick="send('max3')" class="button button-outline" href="#">Max 60 min</button></div>
+        </div>
+    </div>
+    <div class="container footer">
+        <p>Web interface for Orcon 15RF</p>
+    </div>
+</body>
+</html>
