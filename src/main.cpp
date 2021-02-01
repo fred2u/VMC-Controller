@@ -21,7 +21,8 @@ const char *mode_max1 = "Max 15 min";
 const char *mode_max2 = "Max 30 min";
 const char *mode_max3 = "Max 60 min";
 
-const int command_delay = 700;
+const int between_command_delay = 600;
+const int command_time = 400;
 
 void onStationModeGotIP(const WiFiEventStationModeGotIP& event);
 void handleDefault(AsyncWebServerRequest *request);
@@ -59,17 +60,17 @@ void setup()
   digitalWrite(PIN_LED, HIGH);  
 
   pinMode(PIN_DEFAULT, OUTPUT);
-  digitalWrite(PIN_DEFAULT, LOW);
+  digitalWrite(PIN_DEFAULT, HIGH);  
   pinMode(PIN_AUTO, OUTPUT);
-  digitalWrite(PIN_AUTO, LOW);
+  digitalWrite(PIN_AUTO, HIGH);  
   pinMode(PIN_LOW, OUTPUT);
-  digitalWrite(PIN_LOW, LOW);
+  digitalWrite(PIN_LOW, HIGH);  
   pinMode(PIN_MEDIUM, OUTPUT);
-  digitalWrite(PIN_MEDIUM, LOW);
+  digitalWrite(PIN_MEDIUM, HIGH);  
   pinMode(PIN_HIGH, OUTPUT);
-  digitalWrite(PIN_HIGH, LOW);
+  digitalWrite(PIN_HIGH, HIGH);  
   pinMode(PIN_MAX, OUTPUT);
-  digitalWrite(PIN_MAX, LOW);
+  digitalWrite(PIN_MAX, HIGH);  
 
   // LittleFS
   if(LittleFS.begin())
@@ -217,14 +218,14 @@ void sendTempCommand(int pin, int count, String tempMode, int tempDelay)
   for (int i = 1; i < count; i++)
   {
     sendCommand(pin);
-    delay(command_delay);
+    delay(between_command_delay);
   }  
   sendCommand(pin);
 }
 
 void sendCommand(int pin)
-{
-  digitalWrite(pin, HIGH);
-  delay(command_delay);
+{ 
   digitalWrite(pin, LOW);
+  delay(command_time);
+  digitalWrite(pin, HIGH);
 }
