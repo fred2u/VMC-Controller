@@ -4,14 +4,13 @@
 #include "wifi.h"
 
 #define PIN_LED 16
-#define PIN_DEFAULT 2 // 4
-#define PIN_AUTO 4 // 5
-#define PIN_LOW 5 // 1
+#define PIN_DEFAULT 12 // 4
+#define PIN_AUTO 5 // 5
+#define PIN_LOW 2 // 1
 #define PIN_MEDIUM 15 // 2
-#define PIN_HIGH 12 // 3
+#define PIN_HIGH 4 // 3
 #define PIN_MAX 14 // 6
 
-const char *mode_unknown = "Unknown";
 const char *mode_default = "Default";
 const char *mode_auto = "Automatique";
 const char *mode_low = "Low";
@@ -21,8 +20,17 @@ const char *mode_max1 = "Max 15 min";
 const char *mode_max2 = "Max 30 min";
 const char *mode_max3 = "Max 60 min";
 
+const char *command_default = "/default";
+const char *command_auto = "/auto";
+const char *command_low = "/low";
+const char *command_medium = "/medium";
+const char *command_high = "/high";
+const char *command_max1 = "/max1";
+const char *command_max2 = "/max2";
+const char *command_max3 = "/max3";
+
 const int between_command_delay = 600;
-const int command_time = 400;
+const int command_delay = 500;
 
 void onStationModeGotIP(const WiFiEventStationModeGotIP& event);
 void handleDefault(AsyncWebServerRequest *request);
@@ -37,10 +45,10 @@ void sendTempCommand(int pin, int count, String tempMode, int tempDelay);
 void sendCommand(int pin);
 
 AsyncWebServer webServer(80);
-String _command = "";
-String _mode = "";
-String _tempMode = "";
-time_t _tempModeExpire = 0;
+String command = "";
+String currentMode = "";
+String tempMode = "";
+time_t tempModeExpire = 0;
 
 void setup()
 {
@@ -50,8 +58,8 @@ void setup()
   Serial.println("Open Serial");
 
   // WiFi
+  WiFi.hostname("vmc.local");
   WiFi.mode(WIFI_STA);
-  WiFi.hostname("vmc-controller");
   WiFi.begin(ssid, password);
   static WiFiEventHandler onStationModeGotIPHandler = WiFi.onStationModeGotIP(onStationModeGotIP);
   
@@ -88,68 +96,76 @@ void setup()
   webServer.on("/script.js", handleJS);
   webServer.on("/milligram.min.css", handleCSS);
   webServer.on("/style.css", handleCSS);
-  webServer.on("/default", handleCommand);
-  webServer.on("/auto", handleCommand);
-  webServer.on("/low", handleCommand);
-  webServer.on("/medium", handleCommand);
-  webServer.on("/high", handleCommand);
-  webServer.on("/max1", handleCommand);
-  webServer.on("/max2", handleCommand);
-  webServer.on("/max3", handleCommand);
+  webServer.on(command_default, handleCommand);
+  webServer.on(command_auto, handleCommand);
+  webServer.on(command_low, handleCommand);
+  webServer.on(command_medium, handleCommand);
+  webServer.on(command_high, handleCommand);
+  webServer.on(command_max1, handleCommand);
+  webServer.on(command_max2, handleCommand);
+  webServer.on(command_max3, handleCommand);
   webServer.on("/mode", handleMode);
   webServer.onNotFound(handleNotFound);
   webServer.begin();
+
+  command = command_medium;
+  delay(2000);
 }
 
 void loop()
 {
-  if(_tempModeExpire > 0 && _tempModeExpire < time(0))
+  if(tempModeExpire > 0 && tempModeExpire < time(0))
   {
-    _tempModeExpire = 0;
-    _tempMode = "";    
+    tempModeExpire = 0;
+    tempMode = "";    
   }
 
-  if(_command == "")
+  if(command == "")
   {
     return;
   }
 
+  Serial.println(command);
+
   digitalWrite(PIN_LED, LOW); 
 
-  if (_command == "default")
+  if (command == command_default)
   {
     sendCommand(PIN_DEFAULT, mode_default);
   }
-  else if (_command == "auto")
+  else if (command == command_auto)
   {
     sendCommand(PIN_AUTO, mode_auto);
   }
-  else if (_command == "low")
+  else if (command == command_low)
   {
     sendCommand(PIN_LOW, mode_low);
   }
-  else if (_command == "medium")
+  else if (command == command_medium)
   {
     sendCommand(PIN_MEDIUM, mode_medium);
   }
-  else if (_command == "high")
+  else if (command == command_high)
   {
     sendCommand(PIN_HIGH, mode_high);
   }
-  else if (_command == "max1")
-  {
-    sendTempCommand(PIN_MAX, 1, mode_max1, 15);
-  }
-  else if (_command == "max2")
-  {
-    sendTempCommand(PIN_MAX, 2, mode_max2, 30);
-  }
-  else if (_command == "max3")
-  {
-    sendTempCommand(PIN_MAX, 3, mode_max3, 60);
+  else if (currentMode != mode_high)
+  { 
+    if (command == command_max1)
+    {
+      sendTempCommand(PIN_MAX, 1, mode_max1, 15);
+    }
+    else if (command == command_max2)
+    {
+      sendTempCommand(PIN_MAX, 2, mode_max2, 30);
+    }
+    else if (command == command_max3)
+    {
+      sendTempCommand(PIN_MAX, 3, mode_max3, 60);
+    }
   }
 
-  _command = "";
+  command = ""; 
 
   digitalWrite(PIN_LED, HIGH);  
 }
@@ -185,35 +201,34 @@ void handleCSS(AsyncWebServerRequest *request)
 
 void handleCommand(AsyncWebServerRequest *request)
 {
-  _command = request->url();
-  _command.remove(0, 1);
+  command = request->url();
   request->send(200);
 }
 
 void handleMode(AsyncWebServerRequest *request)
 {
-  if(_tempMode == "")
+  if(tempMode == "")
   {
-    request->send(200, "text/plain", _mode);
+    request->send(200, "text/plain", currentMode);
   }
   else
   {
-    request->send(200, "text/plain", _tempMode);
+    request->send(200, "text/plain", tempMode);
   }
 }
 
 void sendCommand(int pin, String mode)
 {
-  _tempModeExpire = 0;
-  _tempMode = "";    
-  _mode = mode;
+  tempModeExpire = 0;
+  tempMode = "";    
+  currentMode = mode;
   sendCommand(pin);
 }
 
-void sendTempCommand(int pin, int count, String tempMode, int tempDelay)
+void sendTempCommand(int pin, int count, String mode, int tempDelay)
 {
-  _tempMode = tempMode;
-  _tempModeExpire = time(0) + (60 * tempDelay);
+  tempMode = mode;
+  tempModeExpire = time(0) + (60 * tempDelay);
   
   for (int i = 1; i < count; i++)
   {
@@ -226,6 +241,6 @@ void sendTempCommand(int pin, int count, String tempMode, int tempDelay)
 void sendCommand(int pin)
 { 
   digitalWrite(pin, LOW);
-  delay(command_time);
+  delay(command_delay);
   digitalWrite(pin, HIGH);
 }
