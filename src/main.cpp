@@ -58,7 +58,7 @@ void setup()
   Serial.println("Open Serial");
 
   // WiFi
-  WiFi.hostname("vmc.local");
+  WiFi.hostname("vmc");
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   static WiFiEventHandler onStationModeGotIPHandler = WiFi.onStationModeGotIP(onStationModeGotIP);
