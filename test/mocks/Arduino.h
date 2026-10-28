@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <map>
-#include <ctime>
 #include <string>
 #include <vector>
 
@@ -63,7 +62,7 @@ struct HwEvent
   enum Kind { WRITE, DELAY } kind;
   int pin;       // WRITE only
   int value;     // WRITE: LOW/HIGH, DELAY: milliseconds
-  long atMillis; // fake clock when the event happened
+  unsigned long atMillis; // fake clock when the event happened
 };
 
 namespace fake
@@ -71,15 +70,11 @@ namespace fake
 extern std::vector<HwEvent> events;
 extern int pinModes[32];
 extern int pinLevels[32];
-extern long nowMillis;  // advanced by delay()
-extern time_t nowEpoch; // returned by time(0)
+extern unsigned long nowMillis; // returned by millis(), advanced by delay() and the tests
 void reset();
 }
 
 void pinMode(uint8_t pin, uint8_t mode);
 void digitalWrite(uint8_t pin, uint8_t value);
 void delay(unsigned long ms);
-
-// main.cpp calls time(0) to expire the Max modes; route it to the fake clock.
-time_t fake_time(time_t *);
-#define time(x) fake_time(x)
+unsigned long millis();

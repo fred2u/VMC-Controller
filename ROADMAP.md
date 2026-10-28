@@ -26,10 +26,10 @@ Items are grouped by topic. The priority shows how much it matters to someone re
 - In the same way, add the **remote reset** (`Default` and `Timer` pressed together for 3 seconds).
 - Make `sendCommand` able to press several buttons at once and to hold the press longer, which both features need.
 
-### 🟠 Feedback on the Max modes
+### ✅ Feedback on the Max modes
 
-- Max commands are silently ignored when the current mode is High. This should at least be reported in the HTTP response (the interface now greys out the Max buttons in High). The behaviour may be on purpose (the unit is already in the high position), but it is not written down anywhere.
-- The command routes answer `200` before running the command. A response that gives the resulting mode, or an error, would be more useful to Home Assistant.
+- ✅ ~~Max commands are silently ignored when the current mode is High.~~ They are refused with `409` and `Max is ignored in High mode` (the Timer button does nothing in High), and the interface greys out the Max buttons in High.
+- ✅ ~~The command routes answer `200` before running the command.~~ They answer the mode the command sets, as `text/plain` (for example `Max 30 min`). The URLs are unchanged, so Home Assistant's `rest_command` keeps working.
 
 ---
 
@@ -90,12 +90,12 @@ Still to do:
 
 Today, the integration goes through a manual `rest_command` configuration. An MQTT integration with Home Assistant auto-discovery would directly create a "VMC" device with its buttons and a mode sensor. It would also give the state without polling `/mode` over and over.
 
-### 🟠 Command reliability
+### ✅ Command reliability
 
-- **Lost commands**: only one command is stored and it is cleared once it has run. A command received while another one is being sent (up to about 3 seconds for Max 60 min) is lost. A small queue is needed, or at least rejecting the request with a `409` or `503` code.
-- **Shared variables**: the current command is a `String` written by the async server and read by `loop()` without protection. A plain variable (an integer or an enum) marked `volatile` would be safer.
-- **Blocking delays**: `loop()` uses `delay()` while sending the pulses. A state machine based on `millis()` would keep the ESP responsive.
-- **Max mode duration**: the end of the Max mode is computed with `time(0)`, without NTP sync. Using `millis()` would be simpler and safer.
+- ✅ ~~**Lost commands**: a command received while another one is being sent is lost.~~ It waits for the current command to finish. Only the last one counts: a newer command replaces the one still waiting, rather than queueing them all.
+- ✅ ~~**Shared variables**: the current command is a `String` written by the async server and read by `loop()`.~~ The commands are a table, and the web server and `loop()` share small `volatile` numbers.
+- ✅ ~~**Blocking delays**: `loop()` uses `delay()` while sending the pulses.~~ A state machine based on `millis()` presses and releases the buttons, so the web server and OTA keep answering while a command is sent.
+- ✅ ~~**Max mode duration**: the end of the Max mode is computed with `time(0)`.~~ It uses `millis()`, and survives its wraparound after 49 days.
 
 ### 🟢 Displayed state
 
