@@ -73,12 +73,12 @@ flowchart LR
 
 ### Bill of materials
 
-Parts used in the build, checked against the [photos](#final-assembly) and the [PCB](#printed-circuit-board). The links are the AliExpress listings the parts can be bought from. Listings change or disappear, so check the specifications below rather than the listing title.
+Parts used in the build, checked against the [photos](#final-assembly) and the [PCB](#printed-circuit-board). The links are the listings the parts were bought from. Listings change or disappear, so check the specifications below rather than the listing title.
 
 | Qty | Part | Specifications to check | Where to buy |
 |---|---|---|---|
 | 1 | Orcon 15RF remote | The remote paired with the ventilation unit, opened and keypad membrane removed | Existing remote |
-| 1 | ESP8266 development board | DOIT ESP‑Mx DevKit: ESP8285 module (ESP‑M), CH340 USB chip, micro‑USB, 2 rows of 12 pins, rows 25.4 mm apart. A NodeMCU board (2 rows of 15 pins) does not fit the PCB footprint. | To be confirmed |
+| 1 | ESP8266 development board | DOIT ESP‑Mx DevKit: ESP‑M2 module (ESP8285), CH340 USB chip, micro‑USB, 2 rows of 12 pins, rows 25.4 mm apart. A NodeMCU board (2 rows of 15 pins) does not fit the PCB footprint. | [Amazon](https://www.amazon.fr/dp/B076Q77M1Z) |
 | 1 | Flexible flat cable (FFC) | 8 pins, **1.0 mm pitch**, AWM 20624. It goes from the remote's keypad connector to the breakout. Check the length and whether the contacts are on the same side at both ends (type A) or on opposite sides (type B) against your own build. | [AliExpress](https://www.aliexpress.com/item/1005007561337665.html) |
 | 1 | FFC breakout | 8-pin FPC adapter board with a **1.0 mm** flip-lock, bottom-contact connector soldered on, and straight 2.54 mm pins. The board silkscreen says `FPC-8P 0.5MM`: that is the unused pad row on the other side, the connector actually soldered is 1.0 mm. | [AliExpress](https://www.aliexpress.com/item/1005012643948143.html) (variant `Straight-8P`) |
 | 1 | Home-made PCB | 50 × 50 mm, Gerber files in [`hardware/pcb/gerber/`](hardware/pcb/gerber/) | JLCPCB or another PCB maker |
