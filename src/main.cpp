@@ -19,7 +19,7 @@
 #endif
 
 // Firmware version, from the Git tags (scripts/version.py), for example
-// "v1.1" or "v1.1-3-g1a2b3c4". Answered on /version.
+// "v1.1" or "v1.1-3-g1a2b3c4". Answered on /version and /info.
 #ifndef VMC_VERSION
 #define VMC_VERSION "unknown"
 #endif
@@ -67,6 +67,7 @@ void handleCSS(AsyncWebServerRequest *request);
 void handleCommand(AsyncWebServerRequest *request);
 void handleMode(AsyncWebServerRequest *request);
 void handleVersion(AsyncWebServerRequest *request);
+void handleInfo(AsyncWebServerRequest *request);
 
 void sendCommand(int pin, String mode);
 void sendTempCommand(int pin, int count, String tempMode, int tempDelay);
@@ -124,7 +125,6 @@ void setup()
   webServer.on("/", handleDefault);
   webServer.on("/index.html", handleDefault);
   webServer.on("/script.js", handleJS);
-  webServer.on("/milligram.min.css", handleCSS);
   webServer.on("/style.css", handleCSS);
   webServer.on(command_default, handleCommand);
   webServer.on(command_auto, handleCommand);
@@ -136,6 +136,7 @@ void setup()
   webServer.on(command_max3, handleCommand);
   webServer.on("/mode", handleMode);
   webServer.on("/version", handleVersion);
+  webServer.on("/info", handleInfo);
   webServer.onNotFound(handleNotFound);
   webServer.begin();
 
@@ -274,6 +275,18 @@ void handleMode(AsyncWebServerRequest *request)
 void handleVersion(AsyncWebServerRequest *request)
 {
   request->send(200, "text/plain", VMC_VERSION);
+}
+
+// Board details for the bottom of the web page, as JSON:
+// {"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}
+// rssi is the Wi-Fi signal in dBm (-50 is very good, -80 is weak).
+void handleInfo(AsyncWebServerRequest *request)
+{
+  String json = String("{\"version\":\"") + VMC_VERSION +
+                "\",\"hostname\":\"" + VMC_HOSTNAME +
+                "\",\"ip\":\"" + WiFi.localIP().toString() +
+                "\",\"rssi\":" + String(WiFi.RSSI()) + "}";
+  request->send(200, "application/json", json);
 }
 
 void sendCommand(int pin, String mode)

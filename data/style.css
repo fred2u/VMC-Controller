@@ -1,35 +1,175 @@
-body{
-    margin: 0 10px;
+/* VMC Controller web interface. No framework: the whole interface has to
+   fit in the 64 KB LittleFS of the production board. Light and dark themes
+   follow the phone settings. */
+:root {
+    --bg: #f3f5f7;
+    --card: #ffffff;
+    --text: #17212b;
+    --muted: #66727f;
+    --line: #dde2e7;
+    --accent: #0f766e;
+    --accent-text: #ffffff;
+    --soft: #e3f2f0;
+    --ok: #16a34a;
+    --bad: #dc2626;
+    color-scheme: light dark;
 }
-.container {
-    max-width: 450px;
-    padding: 0;
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #0e1418;
+        --card: #182127;
+        --text: #e7edf1;
+        --muted: #8d99a4;
+        --line: #26323a;
+        --accent: #2dd4bf;
+        --accent-text: #062925;
+        --soft: #12302d;
+        --ok: #4ade80;
+        --bad: #f87171;
+    }
 }
-.row {
-    flex-direction: row;
-    margin-left: -1.0rem;
-    width: calc(100% + 2.0rem);
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0 auto;
+    max-width: 480px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
 }
-.row .column {
-    margin-bottom: inherit;
-    padding: 0 1.0rem;
+
+.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
 }
-.title {
+h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+
+/* Connection badge: grey while connecting, green online, red offline. */
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.link::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.link.online { color: var(--ok); }
+.link.offline { color: var(--bad); }
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+    transition: opacity 0.3s;
+}
+.status p { margin: 0; }
+.label {
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.mode { font-size: 1.9rem; font-weight: 700; line-height: 1.2; }
+.hint { color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+
+/* Fan icon, turning faster with the mode (speed set from script.js). */
+.fan {
+    flex: none;
+    width: 64px;
+    height: 64px;
+    padding: 10px;
+    border-radius: 50%;
+    background: var(--soft);
+    fill: var(--accent);
+}
+#fan {
+    transform-origin: 12px 12px;
+    animation: spin var(--spin, 0s) linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #fan { animation: none; } }
+
+body.offline .status,
+body.offline .group { opacity: 0.45; }
+
+.group { margin-bottom: 20px; }
+h2 {
+    margin: 0 0 8px 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+h2 .hint { text-transform: none; letter-spacing: 0; }
+
+.grid { display: grid; gap: 10px; }
+.grid.two { grid-template-columns: 1fr 1fr; }
+.grid.three { grid-template-columns: 1fr 1fr 1fr; }
+
+button {
+    min-height: 56px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+button:active { transform: scale(0.97); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+/* Sent, waiting for the ESP to press the button on the remote. */
+button.sending { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+footer {
+    margin-top: 28px;
+    color: var(--muted);
+    font-size: 0.8rem;
     text-align: center;
 }
-.remote .button {
-    width: 100%;
+footer p { margin: 0 0 8px; }
+footer dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    text-align: left;
 }
-.footer {
-    color: rgb(180, 180, 180);
-}
-@media (max-width: 450px) { 
-    .row {
-        flex-direction: column;
-    }
-    .row .column.column-33, .row .column.column-34 {
-        width: 100%;
-        max-width: 100%;
-        flex: 0;
-    }
-}
+footer dt { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+footer dd { margin: 0; color: var(--text); font-weight: 600; word-break: break-all; }

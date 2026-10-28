@@ -19,6 +19,7 @@ public:
   String() {}
   String(const char *s) : value(s ? s : "") {}
   String(const std::string &s) : value(s) {}
+  explicit String(int n) : value(std::to_string(n)) {}
 
   const char *c_str() const { return value.c_str(); }
   bool operator==(const String &o) const { return value == o.value; }
@@ -36,6 +37,12 @@ inline bool operator!=(const char *a, const String &b) { return b != a; }
 
 class IPAddress
 {
+public:
+  IPAddress() {}
+  explicit IPAddress(const char *text) : value(text) {}
+  String toString() const { return value; }
+
+  String value = "0.0.0.0";
 };
 
 class FakeSerial

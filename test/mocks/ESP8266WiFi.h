@@ -27,7 +27,8 @@ public:
   String SSID() { return savedSsid; }
   template <typename F>
   WiFiEventHandler onStationModeGotIP(F) { return WiFiEventHandler(); }
-  IPAddress localIP() { return IPAddress(); }
+  IPAddress localIP() { return ipValue; }
+  int RSSI() { return rssiValue; }
   int status() { return statusValue; }
 
   String hostnameSet;
@@ -36,5 +37,7 @@ public:
   int beginSavedCount = 0;
   int modeSet = 0;
   int statusValue = WL_DISCONNECTED;
+  IPAddress ipValue;
+  int rssiValue = 0;
 };
 extern FakeWiFi WiFi;

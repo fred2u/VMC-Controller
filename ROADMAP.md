@@ -28,7 +28,7 @@ Items are grouped by topic. The priority shows how much it matters to someone re
 
 ### 🟠 Feedback on the Max modes
 
-- Max commands are silently ignored when the current mode is High. This should at least be reported in the HTTP response and in the interface. The behaviour may be on purpose (the unit is already in the high position), but it is not written down anywhere.
+- Max commands are silently ignored when the current mode is High. This should at least be reported in the HTTP response (the interface now greys out the Max buttons in High). The behaviour may be on purpose (the unit is already in the high position), but it is not written down anywhere.
 - The command routes answer `200` before running the command. A response that gives the resulting mode, or an error, would be more useful to Home Assistant.
 
 ---
@@ -116,7 +116,9 @@ There is no authentication. That is acceptable on a trusted local network, but t
 - ✅ ~~Fix a typo in `data/style.css`: `margin: 0 10px O O;` uses the letter `O` instead of the digit `0`, which makes the rule invalid.~~ Replaced with `margin: 0 10px;`.
 - ✅ Show the mode as soon as the page opens, without waiting for the first 2-second refresh.
 - ✅ Fix the `<meta>` tag in `index.html`, where `charset` was stuck to the `viewport` attribute and therefore ignored.
-- 🟢 Add a "Maintenance" page: pairing, reset, system information (version, IP address, Wi‑Fi signal strength, uptime).
+- ✅ Redesign the page for smartphones without a CSS framework (Milligram removed): light and dark themes, buttons grouped by Speed, Program and Max, Online/Offline badge when the ESP stops answering.
+- ✅ Show the system information at the bottom of the page: version, IP address, network name and Wi‑Fi signal, from the new `/info` route (JSON).
+- 🟢 Add a "Maintenance" page: pairing, reset, uptime and more system details.
 
 ---
 
