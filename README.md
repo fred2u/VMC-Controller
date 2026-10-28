@@ -269,7 +269,7 @@ pio run -e espmxdevkit --target uploadfs --upload-port vmc.local   # web interfa
 
 With `VMC_OTA_PASSWORD` set, `scripts/ota_auth.py` gives the password to the upload over Wi‑Fi by itself, so there is nothing else to set. Do not put `--auth` in `PLATFORMIO_UPLOAD_FLAGS`: that variable also applies to USB uploads, which then fail with `esptool: error: unrecognized arguments: --auth=...` (in PowerShell, clear it with `Remove-Item Env:PLATFORMIO_UPLOAD_FLAGS`).
 
-Use `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
+Use `-e nodemcuv2` for the test board, which announces itself as `vmc-test.local` instead (see [Test board](#test-board-nodemcu)). If the name does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
 
 The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 28 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
 
@@ -308,6 +308,8 @@ pio device monitor
 ```
 
 `pio run` without `-e` still builds the production board (`espmxdevkit`) only.
+
+The test board uses its own network name, `vmc-test` (`http://vmc-test/`, `vmc-test.local` for OTA), set by `build_flags` in `platformio.ini`. Both boards can then be on the same Wi‑Fi at the same time: with the same name, the router hands `vmc` to whichever board connected last, and `http://vmc/` and Home Assistant lose the production board. If a test build ever went out with the name `vmc`, remove the old `vmc` entry for the NodeMCU in the router, and restart the production ESP so that it registers its name again.
 
 A NodeMCU labels its pins `D0`…`D8` instead of GPIO numbers:
 
@@ -415,7 +417,7 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 
 | Symptom | What to check |
 |---|---|
-| The page at `http://vmc/` does not open | Try `http://<ip-address>/` with the address from the serial monitor: some routers do not resolve the `vmc` hostname. |
+| The page at `http://vmc/` does not open | Try `http://<ip-address>/` with the address from the serial monitor: some routers do not resolve the `vmc` hostname. If it opens on the test board instead, that board was built with the name `vmc`: see [Test board](#test-board-nodemcu). |
 | `Connection established` never shows | The Wi‑Fi network or password has changed (new Internet box, for example). Restart the ESP: it cannot reach the old network, so it opens the `VMC-Setup` portal for 3 minutes, see [Connect to Wi‑Fi](#5-connect-to-wifi). |
 | The `VMC-Setup` access point does not show | The ESP reached its saved network, or the 3 minutes are over: restart it. To force the portal while the old network still works, erase the flash (`pio run --target erase`) and flash again. |
 | The page is blank or returns an error, but `/mode` answers | The LittleFS file list is empty in the serial monitor: upload the interface with `pio run --target uploadfs`. |

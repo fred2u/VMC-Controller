@@ -11,6 +11,13 @@
 #warning "VMC_OTA_PASSWORD is not set: updates over Wi-Fi are disabled"
 #endif
 
+// Name on the network (DHCP, http://vmc/, OTA as vmc.local). The test
+// board is built with another name (see platformio.ini) so that it can sit
+// on the same Wi-Fi as the production board without taking its name.
+#ifndef VMC_HOSTNAME
+#define VMC_HOSTNAME "vmc"
+#endif
+
 #define PIN_LED 16
 #define PIN_DEFAULT 12 // 4
 #define PIN_AUTO 5 // 5
@@ -193,7 +200,7 @@ void loop()
 // closes after setup_portal_timeout; the ESP then keeps retrying on its own.
 void setupWiFi()
 {
-  WiFi.hostname("vmc");
+  WiFi.hostname(VMC_HOSTNAME);
   WiFi.mode(WIFI_STA);
   static WiFiEventHandler onStationModeGotIPHandler = WiFi.onStationModeGotIP(onStationModeGotIP);
 
@@ -293,7 +300,7 @@ void handleOTA()
     {
       return;
     }
-    ArduinoOTA.setHostname("vmc");
+    ArduinoOTA.setHostname(VMC_HOSTNAME);
     ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.onStart([]()
     {
