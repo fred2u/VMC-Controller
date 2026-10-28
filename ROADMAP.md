@@ -114,7 +114,7 @@ Aucune authentification n'est en place. C'est acceptable sur un réseau local de
 
 ## 4. Interface web
 
-- 🟢 Uniformiser la langue : les boutons sont en anglais (« Low », « Medium », « High »), sauf « Automatique », et la page est déclarée en français.
+- ✅ ~~Uniformiser la langue : les boutons sont en anglais (« Low », « Medium », « High »), sauf « Automatique », et la page est déclarée en français.~~ Tout est en anglais : « Automatique » devient « Auto » (aussi dans la réponse de `/mode`) et la page est déclarée en anglais.
 - ✅ ~~Mettre en évidence le mode actif sur le bouton correspondant, en plus du texte « Current mode ».~~ Le bouton du mode actif est rempli.
 - ✅ ~~Corriger une faute de frappe dans `data/style.css` : `margin: 0 10px O O;` utilise la lettre `O` au lieu du chiffre `0`, ce qui rend la règle invalide.~~ Remplacé par `margin: 0 10px;`.
 - ✅ Afficher le mode dès l'ouverture de la page, sans attendre le premier rafraîchissement de 2 secondes.

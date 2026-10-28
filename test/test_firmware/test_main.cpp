@@ -156,7 +156,7 @@ static void checkSimpleMode(const char *url, int pin, const char *expectedMode)
 void test_each_mode_presses_its_own_button()
 {
   checkSimpleMode("/default", PIN_DEFAULT, "Default");
-  checkSimpleMode("/auto", PIN_AUTO, "Automatique");
+  checkSimpleMode("/auto", PIN_AUTO, "Auto");
   checkSimpleMode("/low", PIN_LOW, "Low");
   checkSimpleMode("/medium", PIN_MEDIUM, "Medium");
   checkSimpleMode("/high", PIN_HIGH, "High");
@@ -201,7 +201,7 @@ void test_only_the_last_command_before_loop_is_sent()
   loop();
   TEST_ASSERT_EQUAL(0, pressCount(PIN_LOW));
   TEST_ASSERT_EQUAL(1, pressCount(PIN_AUTO));
-  TEST_ASSERT_EQUAL_STRING("Automatique", modeText().c_str());
+  TEST_ASSERT_EQUAL_STRING("Auto", modeText().c_str());
 }
 
 // ----- Max (timer) modes ---------------------------------------------------
@@ -256,7 +256,7 @@ void test_a_normal_mode_cancels_a_running_max()
 {
   sendAndRun("/max2");
   sendAndRun("/auto");
-  TEST_ASSERT_EQUAL_STRING("Automatique", modeText().c_str());
+  TEST_ASSERT_EQUAL_STRING("Auto", modeText().c_str());
   TEST_ASSERT_EQUAL(0, (long)tempModeExpire);
 }
 

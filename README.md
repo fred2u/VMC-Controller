@@ -243,12 +243,12 @@ Les tests tournent aussi automatiquement sur GitHub (onglet *Actions*) à chaque
 | ![Interface sur smartphone, mode Medium](docs/screenshots/mobile-medium.png) | ![Interface sur smartphone, mode Max 30 min](docs/screenshots/mobile-max30.png) |
 | Au démarrage, l'ESP envoie Medium | Après un appui sur « Max 30 min » |
 
-La page affiche le mode courant (rafraîchi toutes les 2 secondes) et huit boutons :
+La page affiche le dernier mode envoyé (rafraîchi toutes les 2 secondes, bouton correspondant mis en évidence) et huit boutons :
 
 | Bouton | Effet sur la VMC |
 |---|---|
 | Default | Position défaut, très économique, ignore les détecteurs |
-| Automatique | Mode auto, piloté par le détecteur d'humidité intégré |
+| Auto | Mode auto, piloté par le détecteur d'humidité intégré |
 | Low | Position 1 (basse) |
 | Medium | Position 2 (moyenne) |
 | High | Position 3 (élevée) |
@@ -273,7 +273,7 @@ Toutes les routes sont en `GET`, sur le port 80.
 | `/max1` | `200` vide | Position élevée 15 min |
 | `/max2` | `200` vide | Position élevée 30 min |
 | `/max3` | `200` vide | Position élevée 60 min |
-| `/mode` | `text/plain` | Mode courant : `Default`, `Automatique`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` ou `Max 60 min` |
+| `/mode` | `text/plain` | Mode courant : `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` ou `Max 60 min` |
 
 Le `200` est renvoyé dès que la commande est enregistrée, avant qu'elle soit exécutée. Exemple :
 

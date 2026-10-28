@@ -7,6 +7,8 @@ function send(value) {
 // Fill the mode badge and highlight the matching button
 // (button labels are the exact mode names returned by /mode).
 function showMode(mode) {
+    // Firmware flashed before the switch to English still says "Automatique".
+    if (mode === "Automatique") mode = "Auto";
     document.getElementById("mode").textContent = mode || "…";
     var buttons = document.querySelectorAll(".remote .button");
     for (var i = 0; i < buttons.length; i++) {
