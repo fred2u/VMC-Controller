@@ -32,23 +32,32 @@
 #define PIN_HIGH 4 // 3
 #define PIN_MAX 14 // 6
 
-const char *mode_default = "Default";
-const char *mode_auto = "Auto";
-const char *mode_low = "Low";
-const char *mode_medium = "Medium";
-const char *mode_high = "High";
-const char *mode_max1 = "Max 15 min";
-const char *mode_max2 = "Max 30 min";
-const char *mode_max3 = "Max 60 min";
+// Every command the web server accepts. Its position in this list is the
+// number stored as the waiting command. Max presses the Timer button 1, 2 or 3
+// times: the unit then stays in High for 15, 30 or 60 minutes.
+struct Command
+{
+  const char *url;
+  const char *mode;    // answered on /mode while it is the last mode sent
+  uint8_t pin;
+  uint8_t presses;
+  uint8_t maxMinutes;  // 0: a normal mode, kept until the next command
+};
 
-const char *command_default = "/default";
-const char *command_auto = "/auto";
-const char *command_low = "/low";
-const char *command_medium = "/medium";
-const char *command_high = "/high";
-const char *command_max1 = "/max1";
-const char *command_max2 = "/max2";
-const char *command_max3 = "/max3";
+const Command commands[] = {
+  {"/default", "Default", PIN_DEFAULT, 1, 0},
+  {"/auto", "Auto", PIN_AUTO, 1, 0},
+  {"/low", "Low", PIN_LOW, 1, 0},
+  {"/medium", "Medium", PIN_MEDIUM, 1, 0},
+  {"/high", "High", PIN_HIGH, 1, 0},
+  {"/max1", "Max 15 min", PIN_MAX, 1, 15},
+  {"/max2", "Max 30 min", PIN_MAX, 2, 30},
+  {"/max3", "Max 60 min", PIN_MAX, 3, 60},
+};
+const int8_t command_count = sizeof(commands) / sizeof(commands[0]);
+const int8_t no_command = -1;
+const int8_t command_medium = 3;
+const int8_t command_high = 4;
 
 // Access point opened when the ESP cannot join a network, and how long
 // the ESP waits for the network and for someone to use the portal.
@@ -56,8 +65,9 @@ const char *setup_ap_name = "VMC-Setup";
 const int wifi_connect_timeout = 30; // seconds
 const int setup_portal_timeout = 180; // seconds
 
-const int between_command_delay = 600;
-const int command_delay = 500;
+const unsigned long command_delay = 500;         // ms a button is held down
+const unsigned long between_command_delay = 600; // ms released after a press
+
 
 void onStationModeGotIP(const WiFiEventStationModeGotIP& event);
 void handleDefault(AsyncWebServerRequest *request);
@@ -69,18 +79,38 @@ void handleMode(AsyncWebServerRequest *request);
 void handleVersion(AsyncWebServerRequest *request);
 void handleInfo(AsyncWebServerRequest *request);
 
-void sendCommand(int pin, String mode);
-void sendTempCommand(int pin, int count, String tempMode, int tempDelay);
-void sendCommand(int pin);
+int requestCommand(int8_t command);
+void runSender();
+void startCommand(int8_t command);
+void expireMaxMode();
 void handleOTA();
 void setupWiFi();
 
 AsyncWebServer webServer(80);
 DNSServer dnsServer;
-String command = "";
-String currentMode = "";
-String tempMode = "";
-time_t tempModeExpire = 0;
+
+// Command waiting to be sent, written by the web server, taken by loop().
+// A command received while another one is being sent waits here, and a
+// newer one replaces it: only the last command matters. On the ESP8266 the
+// web server only runs between two loop() calls, so no lock is needed.
+volatile int8_t pendingCommand = no_command;
+
+// What /mode answers: the last normal mode sent, and the Max mode while
+// its timer runs. Written by loop(), read by the web server.
+volatile int8_t currentMode = no_command;
+volatile int8_t maxMode = no_command;
+uint32_t maxModeStart = 0;  // millis() when the Max mode was sent
+uint32_t maxModeLength = 0; // ms
+
+// The command being sent, one step at a time so that loop() never waits:
+// press a button, release it, pause, press again for Max...
+enum SendStep { SEND_IDLE, SEND_PRESSED, SEND_PAUSE };
+SendStep sendStep = SEND_IDLE;
+int8_t sending = no_command;
+uint8_t pressesLeft = 0;
+uint32_t stepStart = 0;
+uint32_t stepLength = 0;
+
 bool otaStarted = false;
 
 void setup()
@@ -126,82 +156,121 @@ void setup()
   webServer.on("/index.html", handleDefault);
   webServer.on("/script.js", handleJS);
   webServer.on("/style.css", handleCSS);
-  webServer.on(command_default, handleCommand);
-  webServer.on(command_auto, handleCommand);
-  webServer.on(command_low, handleCommand);
-  webServer.on(command_medium, handleCommand);
-  webServer.on(command_high, handleCommand);
-  webServer.on(command_max1, handleCommand);
-  webServer.on(command_max2, handleCommand);
-  webServer.on(command_max3, handleCommand);
+  for(int8_t i = 0; i < command_count; i++)
+  {
+    webServer.on(commands[i].url, handleCommand);
+  }
   webServer.on("/mode", handleMode);
   webServer.on("/version", handleVersion);
   webServer.on("/info", handleInfo);
   webServer.onNotFound(handleNotFound);
   webServer.begin();
 
-  command = command_medium;
+  requestCommand(command_medium);
   delay(2000);
 }
 
 void loop()
 {
   handleOTA();
+  expireMaxMode();
+  runSender();
+}
 
-  if(tempModeExpire > 0 && tempModeExpire < time(0))
+// Sets the command to send next, in place of any command still waiting.
+// Answers the HTTP code for the request: 200, or 409 for a Max in High,
+// which the unit ignores. A waiting command is replaced, never added to, so
+// the mode to check is the last one sent.
+int requestCommand(int8_t command)
+{
+  if(commands[command].maxMinutes > 0 && currentMode == command_high)
   {
-    tempModeExpire = 0;
-    tempMode = "";    
+    return 409;
   }
+  pendingCommand = command;
+  return 200;
+}
 
-  if(command == "")
+// Moves the command being sent one step forward when its time is up, or
+// starts the waiting command. Never waits.
+void runSender()
+{
+  uint32_t now = millis();
+  if(sendStep != SEND_IDLE && now - stepStart < stepLength)
   {
     return;
   }
 
-  Serial.println(command);
+  if(sendStep == SEND_PRESSED)
+  {
+    // Release, then pause, also after the last press, so that two commands
+    // in a row are seen by the remote as two presses.
+    digitalWrite(commands[sending].pin, HIGH);
+    pressesLeft--;
+    sendStep = SEND_PAUSE;
+    stepStart = now;
+    stepLength = between_command_delay;
+    return;
+  }
 
-  digitalWrite(PIN_LED, LOW); 
+  if(sendStep == SEND_PAUSE && pressesLeft == 0)
+  {
+    sending = no_command;
+    sendStep = SEND_IDLE;
+    digitalWrite(PIN_LED, HIGH);
+  }
 
-  if (command == command_default)
+  if(sendStep == SEND_IDLE)
   {
-    sendCommand(PIN_DEFAULT, mode_default);
-  }
-  else if (command == command_auto)
-  {
-    sendCommand(PIN_AUTO, mode_auto);
-  }
-  else if (command == command_low)
-  {
-    sendCommand(PIN_LOW, mode_low);
-  }
-  else if (command == command_medium)
-  {
-    sendCommand(PIN_MEDIUM, mode_medium);
-  }
-  else if (command == command_high)
-  {
-    sendCommand(PIN_HIGH, mode_high);
-  }
-  else if (currentMode != mode_high)
-  { 
-    if (command == command_max1)
+    int8_t command = pendingCommand;
+    if(command == no_command)
     {
-      sendTempCommand(PIN_MAX, 1, mode_max1, 15);
+      return;
     }
-    else if (command == command_max2)
-    {
-      sendTempCommand(PIN_MAX, 2, mode_max2, 30);
-    }
-    else if (command == command_max3)
-    {
-      sendTempCommand(PIN_MAX, 3, mode_max3, 60);
-    }
+    pendingCommand = no_command;
+    startCommand(command);
   }
 
-  command = ""; 
+  // Press the button (first press, or the next one for Max).
+  digitalWrite(commands[sending].pin, LOW);
+  sendStep = SEND_PRESSED;
+  stepStart = now;
+  stepLength = command_delay;
+}
 
-  digitalWrite(PIN_LED, HIGH);  
+// Updates the mode answered on /mode and lights the LED, before the first
+// press of a command.
+void startCommand(int8_t command)
+{
+  const Command &c = commands[command];
+  Serial.println(c.url);
+  digitalWrite(PIN_LED, LOW);
+
+  if(c.maxMinutes > 0)
+  {
+    maxModeStart = millis();
+    maxModeLength = c.maxMinutes * 60000UL;
+    maxMode = command;
+  }
+  else
+  {
+    maxMode = no_command;
+    currentMode = command;
+  }
+
+  sending = command;
+  pressesLeft = c.presses;
+}
+
+// Back to the last normal mode once the Max timer is over. millis() counts
+// from boot and needs no clock sync; the subtraction stays right when it
+// wraps around after 49 days.
+void expireMaxMode()
+{
+  if(maxMode != no_command && (uint32_t)millis() - maxModeStart > maxModeLength)
+  {
+    maxMode = no_command;
+  }
 }
 
 // Joins the saved Wi-Fi network. If it cannot be reached (first boot, new
@@ -254,22 +323,32 @@ void handleCSS(AsyncWebServerRequest *request)
   request->send(LittleFS, request->url(), "text/css");
 }
 
+// Answers the mode the command will set (200), or 409 for a Max in High.
 void handleCommand(AsyncWebServerRequest *request)
 {
-  command = request->url();
-  request->send(200);
+  String url = request->url();
+  for(int8_t i = 0; i < command_count; i++)
+  {
+    if(url == commands[i].url)
+    {
+      if(requestCommand(i) == 200)
+      {
+        request->send(200, "text/plain", commands[i].mode);
+      }
+      else
+      {
+        request->send(409, "text/plain", "Max is ignored in High mode");
+      }
+      return;
+    }
+  }
+  request->send(404);
 }
 
 void handleMode(AsyncWebServerRequest *request)
 {
-  if(tempMode == "")
-  {
-    request->send(200, "text/plain", currentMode);
-  }
-  else
-  {
-    request->send(200, "text/plain", tempMode);
-  }
+  int8_t mode = maxMode != no_command ? maxMode : currentMode;
+  request->send(200, "text/plain", mode == no_command ? "" : commands[mode].mode);
 }
 
 void handleVersion(AsyncWebServerRequest *request)
@@ -287,34 +366,6 @@ void handleInfo(AsyncWebServerRequest *request)
                 "\",\"ip\":\"" + WiFi.localIP().toString() +
                 "\",\"rssi\":" + String(WiFi.RSSI()) + "}";
   request->send(200, "application/json", json);
-}
-
-void sendCommand(int pin, String mode)
-{
-  tempModeExpire = 0;
-  tempMode = "";    
-  currentMode = mode;
-  sendCommand(pin);
-}
-
-void sendTempCommand(int pin, int count, String mode, int tempDelay)
-{
-  tempMode = mode;
-  tempModeExpire = time(0) + (60 * tempDelay);
-  
-  for (int i = 1; i < count; i++)
-  {
-    sendCommand(pin);
-    delay(between_command_delay);
-  }  
-  sendCommand(pin);
-}
-
-void sendCommand(int pin)
-{ 
-  digitalWrite(pin, LOW);
-  delay(command_delay);
-  digitalWrite(pin, HIGH);
 }
 
 // Starts OTA once Wi-Fi is up, then listens for updates on every loop.

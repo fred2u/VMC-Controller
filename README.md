@@ -303,9 +303,10 @@ The tests are built by the computer's own C++ compiler, not the ESP one. Linux a
 `src/main.cpp` is compiled **as is**: the tests only replace the Arduino, Wi‑Fi, LittleFS and web server libraries with fakes (folder `test/mocks/`). These fakes record every pin change and every pause, which makes it possible to check, for example:
 
 - that at boot all pins are outputs and released, then that Medium is sent;
-- that each URL presses the right button, with a 500 ms pulse and the LED on while sending;
-- that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
-- that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
+- that each URL presses the right button, with a 500 ms pulse and the LED on while sending, and answers the mode it sets;
+- that `loop()` never calls `delay()`, so the web server keeps answering while a command is sent, and that a command received meanwhile is sent after it (only the last one if several arrive);
+- that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up, also when `millis()` wraps around after 49 days;
+- that Max commands are refused with `409` in High mode;
 - that pages are served from LittleFS, that `/version` answers the built-in version, that `/info` answers the version, name, IP address and Wi‑Fi signal as JSON, and that an unknown URL answers `404`;
 - that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
@@ -399,7 +400,7 @@ The page follows the phone's light or dark theme. It shows:
 | Max 30 min | Position 3 for 30 min, then back to the previous position |
 | Max 60 min | Position 3 for 60 min, then back to the previous position |
 
-The "Max" modes match the remote's Timer button, pressed 1, 2 or 3 times. They are ignored if the current mode is already High.
+The "Max" modes match the remote's Timer button, pressed 1, 2 or 3 times. They are refused (HTTP `409`) if the current mode is already High, where the Timer button does nothing.
 
 ## HTTP API
 
@@ -408,23 +409,24 @@ All routes are `GET`, on port 80.
 | Route | Response | Purpose |
 |---|---|---|
 | `/` or `/index.html` | HTML page | Web interface |
-| `/default` | empty `200` | Default position |
-| `/auto` | empty `200` | Automatic mode |
-| `/low` | empty `200` | Low position |
-| `/medium` | empty `200` | Medium position |
-| `/high` | empty `200` | High position |
-| `/max1` | empty `200` | High position for 15 min |
-| `/max2` | empty `200` | High position for 30 min |
-| `/max3` | empty `200` | High position for 60 min |
+| `/default` | `200`, `text/plain`: `Default` | Default position |
+| `/auto` | `200`, `text/plain`: `Auto` | Automatic mode |
+| `/low` | `200`, `text/plain`: `Low` | Low position |
+| `/medium` | `200`, `text/plain`: `Medium` | Medium position |
+| `/high` | `200`, `text/plain`: `High` | High position |
+| `/max1` | `200`, `text/plain`: `Max 15 min` | High position for 15 min |
+| `/max2` | `200`, `text/plain`: `Max 30 min` | High position for 30 min |
+| `/max3` | `200`, `text/plain`: `Max 60 min` | High position for 60 min |
 | `/mode` | `text/plain` | Current mode: `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` or `Max 60 min` |
 | `/version` | `text/plain` | Firmware version, for example `v1.1` (see [Releases](#releases)) |
 | `/info` | `application/json` | Board details: `{"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak) |
 
-The `200` is sent as soon as the command is recorded, before it runs. Example:
+A command answers right away with the mode it sets, and the ESP presses the button just after. A Max command in High mode answers `409` with `Max is ignored in High mode` and presses nothing. A command received while another one is being sent (up to about 3 seconds for Max 60 min) waits for it to finish; if several arrive meanwhile, only the last one is sent. Example:
 
 ```bash
-curl http://vmc/high
-curl http://vmc/mode   # -> High
+curl http://vmc/high      # -> High
+curl http://vmc/max1      # -> Max is ignored in High mode (409)
+curl http://vmc/mode      # -> High
 curl http://vmc/version   # -> v1.1
 curl http://vmc/info      # -> {"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}
 ```
@@ -483,9 +485,7 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 
 - **No authentication**: anyone on the local network can control the ventilation unit.
 - **Estimated mode**: the mode shown is the one from the last command sent by the ESP. A command sent by another remote, a return to auto mode after a power cut, or a timer ending on the unit side are not seen by the ESP.
-- **Max mode duration**: the ESP computes the end of the Max mode with the internal clock (`time(0)`), without NTP sync. This is enough for a relative duration, but has not been checked in detail.
-- **Max ignored in High**: Max commands are silently ignored if the current mode is High.
-- **Requests close together**: only one command is stored at a time, and it is cleared once it has run. A command received while another one is being sent (up to about 3 seconds for Max 60 min) can therefore be lost.
+- **Max mode duration**: the ESP counts the Max duration from the moment it sends the command, with `millis()`. The unit has its own timer, so the two can drift by a few seconds.
 - **Updates over Wi‑Fi**: protected by a password, but sent unencrypted over the local network.
 - **Setup portal**: the `VMC-Setup` access point has no password. It only opens when the ESP cannot reach its network, for 3 minutes after a boot. There is no button yet to reopen it or to forget the network (see the factory reset idea in the [roadmap](ROADMAP.md)).
 

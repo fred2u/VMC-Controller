@@ -31,9 +31,11 @@ function buttons() { return document.querySelectorAll("button[data-cmd]"); }
 
 function send(button) {
     button.classList.add("sending");
-    get(button.getAttribute("data-cmd"), function(status) {
+    get(button.getAttribute("data-cmd"), function(status, text) {
         button.classList.remove("sending");
-        setOnline(status == 200);
+        // 409: refused by the firmware (Max in High), the ESP is still online.
+        setOnline(status != 0);
+        if (status == 409) $("until").textContent = text;
         // The ESP presses the button within a second: show it soon.
         setTimeout(getData, 800);
     });
@@ -63,7 +65,7 @@ function showMode(mode) {
     $("until").textContent = isMax ? "Then back to the previous mode" : "";
     $("fan").style.setProperty("--spin", (FAN_SPEED[mode] || 0) + "s");
 
-    // The firmware ignores Max while in High (the remote has no boost there).
+    // The firmware refuses Max while in High (the remote has no boost there).
     var maxBlocked = mode === "High";
     $("boost-hint").textContent = maxBlocked ? "· not in High" : "";
 

@@ -22,8 +22,7 @@ namespace fake
 std::vector<HwEvent> events;
 int pinModes[32];
 int pinLevels[32];
-long nowMillis = 0;
-time_t nowEpoch = 1000000;
+unsigned long nowMillis = 0;
 
 void reset()
 {
@@ -34,7 +33,6 @@ void reset()
     pinLevels[i] = -1;
   }
   nowMillis = 0;
-  nowEpoch = 1000000;
 }
 }
 
@@ -52,7 +50,8 @@ void delay(unsigned long ms)
   fake::nowMillis += ms;
 }
 
-time_t fake_time(time_t *) { return fake::nowEpoch; }
+// 32 bits like on the ESP, so the tests see millis() wrap around.
+unsigned long millis() { return (uint32_t)fake::nowMillis; }
 
 // ----- the firmware under test (unchanged) ---------------------------------
 // On the ESP, scripts/ota_password.py sets this from VMC_OTA_PASSWORD.
@@ -69,10 +68,14 @@ time_t fake_time(time_t *) { return fake::nowEpoch; }
 static void boot(const char *savedSsid = "", bool wifiConnects = true)
 {
   fake::reset();
-  command = "";
-  currentMode = "";
-  tempMode = "";
-  tempModeExpire = 0;
+  pendingCommand = no_command;
+  currentMode = no_command;
+  maxMode = no_command;
+  maxModeStart = 0;
+  maxModeLength = 0;
+  sendStep = SEND_IDLE;
+  sending = no_command;
+  pressesLeft = 0;
   otaStarted = false;
   ArduinoOTA.reset();
   WiFi = FakeWiFi();
@@ -85,11 +88,36 @@ static void boot(const char *savedSsid = "", bool wifiConnects = true)
   fake::events.clear();
 }
 
-// Boot, then let loop() send the Medium command that setup() queues.
+static bool senderIdle() { return sendStep == SEND_IDLE && pendingCommand == no_command; }
+
+// Calls loop() every millisecond, like the ESP does, until nothing is left
+// to send (or `ms` milliseconds have gone by).
+static void runFor(unsigned long ms)
+{
+  for (unsigned long i = 0; i < ms; i++)
+  {
+    loop();
+    fake::nowMillis++;
+  }
+}
+
+static void runUntilIdle()
+{
+  for (int i = 0; i < 100000; i++)
+  {
+    loop();
+    if (senderIdle())
+      return;
+    fake::nowMillis++;
+  }
+  TEST_FAIL_MESSAGE("the command never finished");
+}
+
+// Boot, then let loop() send the Medium command that setup() asks for.
 static void bootAndSettle()
 {
   boot();
-  loop();
+  runUntilIdle();
   fake::events.clear();
 }
 
@@ -114,7 +142,7 @@ static int pressCountOnButtons()
 static void sendAndRun(const char *url)
 {
   TEST_ASSERT_EQUAL(200, webServer.request(url).status);
-  loop();
+  runUntilIdle();
 }
 
 void setUp() { bootAndSettle(); }
@@ -176,7 +204,7 @@ void test_without_wifi_the_esp_retries_and_still_sends_medium()
   TEST_ASSERT_EQUAL(WIFI_STA, WiFi.modeSet);
   TEST_ASSERT_EQUAL(1, WiFi.beginSavedCount);
   TEST_ASSERT_TRUE(webServer.started);
-  loop();
+  runUntilIdle();
   TEST_ASSERT_EQUAL(1, pressCount(PIN_MEDIUM));
 }
 
@@ -195,7 +223,7 @@ void test_mode_is_empty_before_the_first_command()
 void test_boot_sends_medium()
 {
   boot();
-  loop();
+  runUntilIdle();
   TEST_ASSERT_EQUAL(1, pressCount(PIN_MEDIUM));
   TEST_ASSERT_EQUAL(1, pressCountOnButtons());
   TEST_ASSERT_EQUAL_STRING("Medium", modeText().c_str());
@@ -224,19 +252,36 @@ void test_each_mode_presses_its_own_button()
 void test_a_press_is_a_500ms_low_pulse_with_the_led_on()
 {
   sendAndRun("/low");
-  // LED on, button down, 500 ms, button up, LED off.
-  TEST_ASSERT_EQUAL(5, (int)fake::events.size());
-  TEST_ASSERT_TRUE(fake::events[0].kind == HwEvent::WRITE);
+  // LED on, button down, 500 ms later button up, 600 ms pause, LED off.
+  TEST_ASSERT_EQUAL(4, (int)fake::events.size());
   TEST_ASSERT_EQUAL(PIN_LED, fake::events[0].pin);
   TEST_ASSERT_EQUAL(LOW, fake::events[0].value);
   TEST_ASSERT_EQUAL(PIN_LOW, fake::events[1].pin);
   TEST_ASSERT_EQUAL(LOW, fake::events[1].value);
-  TEST_ASSERT_TRUE(fake::events[2].kind == HwEvent::DELAY);
-  TEST_ASSERT_EQUAL(500, fake::events[2].value);
-  TEST_ASSERT_EQUAL(PIN_LOW, fake::events[3].pin);
+  TEST_ASSERT_EQUAL(PIN_LOW, fake::events[2].pin);
+  TEST_ASSERT_EQUAL(HIGH, fake::events[2].value);
+  TEST_ASSERT_EQUAL(500, (long)(fake::events[2].atMillis - fake::events[1].atMillis));
+  TEST_ASSERT_EQUAL(PIN_LED, fake::events[3].pin);
   TEST_ASSERT_EQUAL(HIGH, fake::events[3].value);
-  TEST_ASSERT_EQUAL(PIN_LED, fake::events[4].pin);
-  TEST_ASSERT_EQUAL(HIGH, fake::events[4].value);
+  TEST_ASSERT_EQUAL(600, (long)(fake::events[3].atMillis - fake::events[2].atMillis));
+}
+
+void test_loop_never_waits()
+{
+  webServer.request("/max3");
+  runUntilIdle();
+  for (const HwEvent &e : fake::events)
+    TEST_ASSERT_TRUE_MESSAGE(e.kind != HwEvent::DELAY, "delay() called in loop()");
+}
+
+void test_the_web_server_answers_while_a_command_is_sent()
+{
+  webServer.request("/max3");
+  runFor(1000);
+  TEST_ASSERT_FALSE(senderIdle());
+  AsyncWebServerRequest r = webServer.request("/mode");
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("Max 60 min", r.content.c_str());
 }
 
 void test_loop_does_nothing_without_a_command()
@@ -257,10 +302,60 @@ void test_only_the_last_command_before_loop_is_sent()
 {
   webServer.request("/low");
   webServer.request("/auto");
-  loop();
+  runUntilIdle();
   TEST_ASSERT_EQUAL(0, pressCount(PIN_LOW));
   TEST_ASSERT_EQUAL(1, pressCount(PIN_AUTO));
   TEST_ASSERT_EQUAL_STRING("Auto", modeText().c_str());
+}
+
+void test_a_command_received_while_sending_is_sent_after_it()
+{
+  webServer.request("/max2");
+  runFor(700); // first Timer press done
+  TEST_ASSERT_EQUAL(200, webServer.request("/low").status);
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(2, pressCount(PIN_MAX)); // Max 30 min is not cut short
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_LOW));
+  TEST_ASSERT_EQUAL_STRING("Low", modeText().c_str());
+}
+
+void test_while_sending_only_the_last_waiting_command_is_kept()
+{
+  webServer.request("/max3");
+  runFor(500);
+  webServer.request("/low");
+  webServer.request("/high");
+  webServer.request("/auto");
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(3, pressCount(PIN_MAX));
+  TEST_ASSERT_EQUAL(0, pressCount(PIN_LOW));
+  TEST_ASSERT_EQUAL(0, pressCount(PIN_HIGH));
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_AUTO));
+  TEST_ASSERT_EQUAL(4, pressCountOnButtons());
+}
+
+void test_two_commands_in_a_row_are_600ms_apart()
+{
+  webServer.request("/low");
+  runFor(10);
+  webServer.request("/medium");
+  runUntilIdle();
+  unsigned long lowUp = 0, mediumDown = 0;
+  for (const HwEvent &e : fake::events)
+  {
+    if (e.pin == PIN_LOW && e.value == HIGH) lowUp = e.atMillis;
+    if (e.pin == PIN_MEDIUM && e.value == LOW) mediumDown = e.atMillis;
+  }
+  TEST_ASSERT_EQUAL(600, (long)(mediumDown - lowUp));
+}
+
+void test_a_command_answers_the_mode_it_sets()
+{
+  AsyncWebServerRequest r = webServer.request("/max2");
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("text/plain", r.contentType.c_str());
+  TEST_ASSERT_EQUAL_STRING("Max 30 min", r.content.c_str());
+  TEST_ASSERT_EQUAL_STRING("Low", webServer.request("/low").content.c_str());
 }
 
 // ----- Max (timer) modes ---------------------------------------------------
@@ -272,7 +367,7 @@ static void checkMax(const char *url, int presses, const char *expectedMode, int
   TEST_ASSERT_EQUAL_MESSAGE(presses, pressCount(PIN_MAX), url);
   TEST_ASSERT_EQUAL_MESSAGE(presses, pressCountOnButtons(), url);
   TEST_ASSERT_EQUAL_STRING_MESSAGE(expectedMode, modeText().c_str(), url);
-  TEST_ASSERT_EQUAL_MESSAGE(1000000 + 60 * minutes, (long)tempModeExpire, url);
+  TEST_ASSERT_EQUAL_MESSAGE(minutes * 60000L, (long)maxModeLength, url);
 }
 
 void test_max_presses_the_max_button_1_2_or_3_times()
@@ -298,17 +393,30 @@ void test_max_presses_are_600ms_apart()
 void test_max_mode_ends_after_its_timer_and_shows_the_previous_mode()
 {
   sendAndRun("/low");
+  unsigned long sentAt = fake::nowMillis;
   sendAndRun("/max1");
   TEST_ASSERT_EQUAL_STRING("Max 15 min", modeText().c_str());
 
-  fake::nowEpoch += 15 * 60; // exactly at the end: still Max
+  fake::nowMillis = sentAt + 15 * 60000UL; // exactly at the end: still Max
   loop();
   TEST_ASSERT_EQUAL_STRING("Max 15 min", modeText().c_str());
 
-  fake::nowEpoch += 1; // one second later: back to Low
+  fake::nowMillis += 1000; // one second later: back to Low
   loop();
   TEST_ASSERT_EQUAL_STRING("Low", modeText().c_str());
-  TEST_ASSERT_EQUAL(0, (long)tempModeExpire);
+}
+
+void test_max_timer_survives_the_millis_wraparound()
+{
+  // millis() goes back to 0 after about 49 days.
+  fake::nowMillis = 0xFFFFFFFFUL - 60000;
+  sendAndRun("/max1");
+  fake::nowMillis += 10 * 60000UL; // wrapped, 10 min later: still Max
+  loop();
+  TEST_ASSERT_EQUAL_STRING("Max 15 min", modeText().c_str());
+  fake::nowMillis += 6 * 60000UL; // 16 min: over
+  loop();
+  TEST_ASSERT_EQUAL_STRING("Medium", modeText().c_str());
 }
 
 void test_a_normal_mode_cancels_a_running_max()
@@ -316,32 +424,55 @@ void test_a_normal_mode_cancels_a_running_max()
   sendAndRun("/max2");
   sendAndRun("/auto");
   TEST_ASSERT_EQUAL_STRING("Auto", modeText().c_str());
-  TEST_ASSERT_EQUAL(0, (long)tempModeExpire);
+  TEST_ASSERT_EQUAL(no_command, maxMode);
 }
 
 void test_a_new_max_restarts_the_timer()
 {
   sendAndRun("/max3");
-  fake::nowEpoch += 10 * 60;
+  fake::nowMillis += 10 * 60000UL;
+  unsigned long restartedAt = fake::nowMillis;
   sendAndRun("/max1");
   TEST_ASSERT_EQUAL_STRING("Max 15 min", modeText().c_str());
-  TEST_ASSERT_EQUAL((long)fake::nowEpoch + 15 * 60, (long)tempModeExpire);
+  fake::nowMillis = restartedAt + 15 * 60000UL;
+  loop();
+  TEST_ASSERT_EQUAL_STRING("Max 15 min", modeText().c_str());
+  fake::nowMillis += 1000;
+  loop();
+  TEST_ASSERT_EQUAL_STRING("Medium", modeText().c_str());
 }
 
-// Current behaviour, documented on purpose (see ROADMAP.md): in High mode
-// the Max commands are dropped without pressing anything, and the web
-// request still answers 200.
-void test_max_is_ignored_while_in_high_mode()
+// In High the remote's Timer button does nothing (the unit is already in
+// its highest position): Max is refused with 409 and nothing is pressed.
+void test_max_is_refused_with_409_in_high_mode()
 {
   sendAndRun("/high");
   fake::events.clear();
-  sendAndRun("/max2");
+  AsyncWebServerRequest r = webServer.request("/max2");
+  TEST_ASSERT_EQUAL(409, r.status);
+  TEST_ASSERT_EQUAL_STRING("Max is ignored in High mode", r.content.c_str());
+  runUntilIdle();
   TEST_ASSERT_EQUAL(0, pressCountOnButtons());
   TEST_ASSERT_EQUAL_STRING("High", modeText().c_str());
-  TEST_ASSERT_EQUAL(0, (long)tempModeExpire);
-  // The command is consumed: it is not replayed later.
+  // It is not replayed later.
   sendAndRun("/low");
   TEST_ASSERT_EQUAL(0, pressCount(PIN_MAX));
+}
+
+void test_max_is_refused_while_high_is_being_sent()
+{
+  webServer.request("/high");
+  runFor(100);
+  TEST_ASSERT_EQUAL(409, webServer.request("/max1").status);
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(0, pressCount(PIN_MAX));
+}
+
+void test_max_is_accepted_again_after_leaving_high()
+{
+  sendAndRun("/high");
+  sendAndRun("/low");
+  TEST_ASSERT_EQUAL(200, webServer.request("/max1").status);
 }
 
 // ----- web server ----------------------------------------------------------
@@ -395,7 +526,7 @@ void test_info_answers_version_hostname_ip_and_signal_as_json()
 void test_unknown_url_answers_404_and_presses_nothing()
 {
   TEST_ASSERT_EQUAL(404, webServer.request("/turbo").status);
-  loop();
+  runFor(2000);
   TEST_ASSERT_EQUAL(0, pressCountOnButtons());
 }
 
@@ -463,15 +594,24 @@ int main(int, char **)
   RUN_TEST(test_boot_sends_medium);
   RUN_TEST(test_each_mode_presses_its_own_button);
   RUN_TEST(test_a_press_is_a_500ms_low_pulse_with_the_led_on);
+  RUN_TEST(test_loop_never_waits);
+  RUN_TEST(test_the_web_server_answers_while_a_command_is_sent);
   RUN_TEST(test_loop_does_nothing_without_a_command);
   RUN_TEST(test_a_command_is_sent_only_once);
   RUN_TEST(test_only_the_last_command_before_loop_is_sent);
+  RUN_TEST(test_a_command_received_while_sending_is_sent_after_it);
+  RUN_TEST(test_while_sending_only_the_last_waiting_command_is_kept);
+  RUN_TEST(test_two_commands_in_a_row_are_600ms_apart);
+  RUN_TEST(test_a_command_answers_the_mode_it_sets);
   RUN_TEST(test_max_presses_the_max_button_1_2_or_3_times);
   RUN_TEST(test_max_presses_are_600ms_apart);
   RUN_TEST(test_max_mode_ends_after_its_timer_and_shows_the_previous_mode);
+  RUN_TEST(test_max_timer_survives_the_millis_wraparound);
   RUN_TEST(test_a_normal_mode_cancels_a_running_max);
   RUN_TEST(test_a_new_max_restarts_the_timer);
-  RUN_TEST(test_max_is_ignored_while_in_high_mode);
+  RUN_TEST(test_max_is_refused_with_409_in_high_mode);
+  RUN_TEST(test_max_is_refused_while_high_is_being_sent);
+  RUN_TEST(test_max_is_accepted_again_after_leaving_high);
   RUN_TEST(test_pages_are_served_from_littlefs);
   RUN_TEST(test_mode_answers_plain_text);
   RUN_TEST(test_version_answers_the_built_in_version_as_plain_text);
