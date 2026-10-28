@@ -26,6 +26,10 @@ jobs:
         env: [espmxdevkit, nodemcuv2]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Whole history with the tags, so the firmware version (git
+          # describe, scripts/version.py) is the same as on a computer.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

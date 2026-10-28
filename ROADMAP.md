@@ -125,4 +125,4 @@ There is no authentication. That is acceptable on a trusted local network, but t
 - 🟠 Add a circuit diagram, for example exported from EasyEDA, in addition to the PCB.
 - ✅ ~~Add an automatic build check (GitHub Actions with PlatformIO), to make sure the firmware still builds with recent library versions.~~ Done along with the unit tests (`.github/workflows/ci.yml`).
 - ✅ ~~Pin the ESP Async WebServer library version in `platformio.ini`. Without a version, a library update can break the build.~~ Done: the libraries now come from the maintained ESP32Async forks, pinned to a release, and the `espressif8266` platform is pinned too.
-- 🟢 Number the firmware versions (Git tags) and show the version in the interface.
+- ✅ ~~Number the firmware versions (Git tags) and show the version in the interface.~~ The version comes from `git describe` at build time, is answered on `/version` and shown at the bottom of the page, see "Releases" in the README.

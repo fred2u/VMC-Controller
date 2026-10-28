@@ -19,14 +19,15 @@ The original RF remote (Orcon 15RF) was taken apart: its keypad was replaced by 
 7. [Software](#software)
 8. [Installation](#installation)
 9. [Tests](#tests)
-10. [Usage](#usage)
-11. [HTTP API](#http-api)
-12. [Home Assistant integration](#home-assistant-integration)
-13. [How the ventilation unit works](#how-the-ventilation-unit-works)
-14. [Troubleshooting](#troubleshooting)
-15. [Known limitations](#known-limitations)
-16. [Ideas for improvement](#ideas-for-improvement)
-17. [License](#license)
+10. [Releases](#releases)
+11. [Usage](#usage)
+12. [HTTP API](#http-api)
+13. [Home Assistant integration](#home-assistant-integration)
+14. [How the ventilation unit works](#how-the-ventilation-unit-works)
+15. [Troubleshooting](#troubleshooting)
+16. [Known limitations](#known-limitations)
+17. [Ideas for improvement](#ideas-for-improvement)
+18. [License](#license)
 
 ---
 
@@ -183,7 +184,9 @@ Layout:
 ├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
 ├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
 ├── scripts/
-│   └── ota_password.py  Reads the OTA password from VMC_OTA_PASSWORD
+│   ├── ota_password.py  Reads the OTA password from VMC_OTA_PASSWORD
+│   ├── ota_auth.py      Gives that password to uploads over Wi‑Fi
+│   └── version.py       Builds the version from the Git tags into the firmware
 └── data/                Files uploaded to LittleFS
     ├── index.html       Remote control page
     ├── script.js        Sends commands and refreshes the mode
@@ -291,7 +294,7 @@ The tests are built by the computer's own C++ compiler, not the ESP one. Linux a
 - that each URL presses the right button, with a 500 ms pulse and the LED on while sending;
 - that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
 - that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
-- that pages are served from LittleFS and that an unknown URL answers `404`.
+- that pages are served from LittleFS, that `/version` answers the built-in version and that an unknown URL answers `404`;
 - that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
@@ -329,6 +332,35 @@ None of these pins is used by the flash memory or the USB serial link, and the b
 
 - `D1`, `D2`, `D4`, `D5`, `D6`: from `3V3` through the resistor and the LED to the pin (cathode on the pin side). The LED lights up during the 500 ms press, like the remote button.
 - `D8` (GPIO15): wire it the other way, from the pin through the resistor and the LED to `GND`. An LED pulled up to `3V3` could hold GPIO15 HIGH at boot and stop the board from starting. This LED is lit at rest and goes off during a Medium press.
+
+## Releases
+
+Each firmware knows its version, taken from the Git tags when it is built (`scripts/version.py`, which runs `git describe --tags --always --dirty`). The ESP prints it on the serial port at boot, answers it on `/version`, and the web interface shows it at the bottom of the page.
+
+| Version shown | Meaning |
+|---|---|
+| `v1.1` | Built exactly on the `v1.1` tag: a release |
+| `v1.1-3-g1a2b3c4` | 3 commits after `v1.1`, at commit `1a2b3c4` (work in progress) |
+| `v1.1-3-g1a2b3c4-dirty` | Same, with changes not committed yet |
+| `unknown` | Git was not found, or the project was not cloned with Git (ZIP download) |
+
+The PlatformIO build log shows it too: `VMC Controller firmware version: v1.1`.
+
+To publish a version:
+
+1. Merge the changes into `main`, then test them on the test board.
+2. On GitHub: **Releases** › **Draft a new release** › **Choose a tag**, type the new number (for example `v1.1`), target `main`, then **Publish release**. Or from a terminal (PowerShell works the same):
+
+   ```bash
+   git checkout main
+   git pull
+   git tag -a v1.1 -m "v1.1"
+   git push origin v1.1
+   ```
+
+3. Get the tag on the computer (`git pull --tags`), then build and flash: the ESP now shows `v1.1`.
+
+Numbers follow `vMAJOR.MINOR`: increase `MINOR` for a new feature or a fix, and `MAJOR` for a change that needs a USB flash or a new wiring. The web interface (LittleFS) has no version of its own: upload it again (`uploadfs`) with each release.
 
 ## Usage
 
@@ -368,12 +400,14 @@ All routes are `GET`, on port 80.
 | `/max2` | empty `200` | High position for 30 min |
 | `/max3` | empty `200` | High position for 60 min |
 | `/mode` | `text/plain` | Current mode: `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` or `Max 60 min` |
+| `/version` | `text/plain` | Firmware version, for example `v1.1` (see [Releases](#releases)) |
 
 The `200` is sent as soon as the command is recorded, before it runs. Example:
 
 ```bash
 curl http://vmc/high
 curl http://vmc/mode   # -> High
+curl http://vmc/version   # -> v1.1
 ```
 
 ## Home Assistant integration
