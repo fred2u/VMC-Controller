@@ -57,7 +57,7 @@ Items are grouped by topic. The priority shows how much it matters to someone re
 
 - **A single PCB** that directly carries:
   - a bare ESP module (ESP‑12F or ESP8285) instead of the development board;
-  - an 8-pin 0.5 mm pitch FPC connector soldered on the board, to plug in the remote's ribbon without a breakout;
+  - an 8-pin 1.0 mm pitch FPC connector soldered on the board, to plug in the remote's ribbon without a breakout;
   - a USB socket (preferably USB‑C) and a 3.3 V regulator;
   - the reset button and a status LED.
 - **Stacking**: put the remote board on top of the new PCB, or the other way round, rather than side by side.
