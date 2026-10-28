@@ -18,6 +18,12 @@
 #define VMC_HOSTNAME "vmc"
 #endif
 
+// Firmware version, from the Git tags (scripts/version.py), for example
+// "v1.1" or "v1.1-3-g1a2b3c4". Answered on /version.
+#ifndef VMC_VERSION
+#define VMC_VERSION "unknown"
+#endif
+
 #define PIN_LED 16
 #define PIN_DEFAULT 12 // 4
 #define PIN_AUTO 5 // 5
@@ -60,6 +66,7 @@ void handleJS(AsyncWebServerRequest *request);
 void handleCSS(AsyncWebServerRequest *request);
 void handleCommand(AsyncWebServerRequest *request);
 void handleMode(AsyncWebServerRequest *request);
+void handleVersion(AsyncWebServerRequest *request);
 
 void sendCommand(int pin, String mode);
 void sendTempCommand(int pin, int count, String tempMode, int tempDelay);
@@ -81,6 +88,7 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   Serial.println("Open Serial");
+  Serial.println("VMC Controller " VMC_VERSION);
 
   // GPIO
   pinMode(PIN_LED, OUTPUT);
@@ -127,6 +135,7 @@ void setup()
   webServer.on(command_max2, handleCommand);
   webServer.on(command_max3, handleCommand);
   webServer.on("/mode", handleMode);
+  webServer.on("/version", handleVersion);
   webServer.onNotFound(handleNotFound);
   webServer.begin();
 
@@ -260,6 +269,11 @@ void handleMode(AsyncWebServerRequest *request)
   {
     request->send(200, "text/plain", tempMode);
   }
+}
+
+void handleVersion(AsyncWebServerRequest *request)
+{
+  request->send(200, "text/plain", VMC_VERSION);
 }
 
 void sendCommand(int pin, String mode)

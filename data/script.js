@@ -30,6 +30,23 @@ function getData() {
     xhttp.send();
 }
 
+// Firmware version, asked once (it only changes with a new firmware).
+// Firmware older than the /version route answers 404: shown as "unknown".
+function getVersion() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function()
+    {
+        if(this.readyState == 4)
+        {
+            var version = this.status == 200 ? this.responseText : "";
+            document.getElementById("version").textContent = version || "unknown";
+        }
+    };
+    xhttp.open("GET", "version", true);
+    xhttp.send();
+}
+
 // Ask right away instead of waiting 2 s for the first refresh.
 document.addEventListener("DOMContentLoaded", getData);
+document.addEventListener("DOMContentLoaded", getVersion);
 setInterval(getData, 2000);

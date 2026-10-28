@@ -57,6 +57,8 @@ time_t fake_time(time_t *) { return fake::nowEpoch; }
 // ----- the firmware under test (unchanged) ---------------------------------
 // On the ESP, scripts/ota_password.py sets this from VMC_OTA_PASSWORD.
 #define OTA_PASSWORD "test-ota-password"
+// On the ESP, scripts/version.py sets this from the Git tags.
+#define VMC_VERSION "v9.9-test"
 #include "../../src/main.cpp"
 
 // ----- helpers -------------------------------------------------------------
@@ -367,6 +369,15 @@ void test_mode_answers_plain_text()
   TEST_ASSERT_EQUAL_STRING("text/plain", r.contentType.c_str());
 }
 
+void test_version_answers_the_built_in_version_as_plain_text()
+{
+  AsyncWebServerRequest r = webServer.request("/version");
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("text/plain", r.contentType.c_str());
+  TEST_ASSERT_EQUAL_STRING("v9.9-test", r.content.c_str());
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+}
+
 void test_unknown_url_answers_404_and_presses_nothing()
 {
   TEST_ASSERT_EQUAL(404, webServer.request("/turbo").status);
@@ -449,6 +460,7 @@ int main(int, char **)
   RUN_TEST(test_max_is_ignored_while_in_high_mode);
   RUN_TEST(test_pages_are_served_from_littlefs);
   RUN_TEST(test_mode_answers_plain_text);
+  RUN_TEST(test_version_answers_the_built_in_version_as_plain_text);
   RUN_TEST(test_unknown_url_answers_404_and_presses_nothing);
   RUN_TEST(test_ota_waits_for_the_wifi_connection);
   RUN_TEST(test_ota_starts_once_with_hostname_and_password_when_wifi_is_up);
