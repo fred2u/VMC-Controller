@@ -313,3 +313,7 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 - Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
 - Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
 - Ajouter un schéma de câblage, et le fichier source du boîtier (STEP ou Fusion 360) pour pouvoir le modifier.
+
+## Licence
+
+Ce projet (code, fichiers du boîtier et du PCB) est distribué sous licence [MIT](LICENSE). La feuille de style [Milligram](https://milligram.io/) incluse dans `data/` est elle aussi sous licence MIT.
