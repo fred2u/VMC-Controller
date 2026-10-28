@@ -127,9 +127,9 @@ The enclosure STL files are in [`hardware/enclosure/`](hardware/enclosure/). Dim
 
 | File | Dimensions (L × W × H) | Likely part |
 |---|---|---|
-| [`Body2.stl`](hardware/enclosure/Body2.stl) | 62 × 62 × 38 | Bottom of the enclosure |
-| [`Body3.stl`](hardware/enclosure/Body3.stl) | 62 × 62 × 24 | Lid, which fits onto the bottom |
-| [`Body4.stl`](hardware/enclosure/Body4.stl) | 53 × 53 × 1 | Plate that holds the boards |
+| [`enclosure-bottom.stl`](hardware/enclosure/enclosure-bottom.stl) | 62 × 62 × 38 | Bottom of the enclosure |
+| [`enclosure-lid.stl`](hardware/enclosure/enclosure-lid.stl) | 62 × 62 × 24 | Lid, which fits onto the bottom |
+| [`board-plate.stl`](hardware/enclosure/board-plate.stl) | 53 × 53 × 1 | Plate that holds the boards |
 
 GitHub shows a 3D preview of an STL file when you click on it.
 
