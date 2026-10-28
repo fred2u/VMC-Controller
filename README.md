@@ -399,7 +399,7 @@ The **Maintenance** page (`http://vmc/maintenance`) gathers what is rarely neede
 - The ESP details: firmware, time since the last start and its reason, free memory, Wi‑Fi network and signal, IP address and name.
 - **Restart** the ESP, and **Forget Wi‑Fi**: the ESP erases the saved network and restarts in setup mode (`VMC-Setup` access point, see [Connect to Wi‑Fi](#5-connect-to-wifi)), for example after changing the Internet box.
 
-Each action asks for confirmation, except pairing.
+Each action asks for confirmation first.
 
 | Button | Effect on the ventilation unit |
 |---|---|
