@@ -258,7 +258,38 @@ pio test -e native
 - that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
 - that pages are served from LittleFS and that an unknown URL answers `404`.
 
-The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for the ESP.
+The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for both ESP boards (production and test).
+
+### Test board (NodeMCU)
+
+To try changes without touching the VMC, the same firmware can run on a spare **NodeMCU v3** board (LoLin, ESP‑12 module with 4 MB flash, CH340 USB chip). The code is unchanged; only the PlatformIO environment differs:
+
+```bash
+pio run -e nodemcuv2 --target upload     # firmware
+pio run -e nodemcuv2 --target uploadfs   # web interface (data/)
+pio device monitor
+```
+
+`pio run` without `-e` still builds the production board (`espmxdevkit`) only.
+
+A NodeMCU labels its pins `D0`…`D8` instead of GPIO numbers:
+
+| Button | GPIO | NodeMCU pin | Notes |
+|---|---|---|---|
+| 1 (`PIN_LOW`) | GPIO2 | `D4` | Boot pin, must be HIGH at boot. Also drives the blue LED of the ESP‑12 module, which lights up on each Low press. |
+| 2 (`PIN_MEDIUM`) | GPIO15 | `D8` | Boot pin, must be LOW at boot (10 kΩ pull-down on the board). |
+| 3 (`PIN_HIGH`) | GPIO4 | `D2` | |
+| House (`PIN_DEFAULT`) | GPIO12 | `D6` | |
+| Auto (`PIN_AUTO`) | GPIO5 | `D1` | |
+| Timer (`PIN_MAX`) | GPIO14 | `D5` | |
+| Activity LED (`PIN_LED`) | GPIO16 | `D0` | Also drives the board's red LED, which lights up during every command. |
+
+None of these pins is used by the flash memory or the USB serial link, and the boot pins are only driven after boot, so the NodeMCU starts normally with nothing connected.
+
+**Testing without the remote**: with nothing wired, the board's two LEDs and the serial monitor (which prints each command received) are already enough to check the web interface and Home Assistant. To see every button, wire one LED per output, with a 330 Ω to 1 kΩ resistor:
+
+- `D1`, `D2`, `D4`, `D5`, `D6`: from `3V3` through the resistor and the LED to the pin (cathode on the pin side). The LED lights up during the 500 ms press, like the remote button.
+- `D8` (GPIO15): wire it the other way, from the pin through the resistor and the LED to `GND`. An LED pulled up to `3V3` could hold GPIO15 HIGH at boot and stop the board from starting. This LED is lit at rest and goes off during a Medium press.
 
 ## Usage
 
