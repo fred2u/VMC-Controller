@@ -1,0 +1,10 @@
+// Wi-Fi credentials used by src/main.cpp.
+//
+// Copy this file to include/wifi.h (which is excluded from Git)
+// and put your own network name and password in the copy:
+//
+//   cp include/wifi.h.example include/wifi.h
+#pragma once
+
+const char *ssid = "NETWORK_NAME";
+const char *password = "PASSWORD";
