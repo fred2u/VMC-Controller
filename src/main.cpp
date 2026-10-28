@@ -4,15 +4,11 @@
 #include <ESPAsyncWiFiManager.h>
 #include "LittleFS.h"
 
-// include/wifi.h is optional: the Wi-Fi network is picked from the setup
-// portal. The file can hold the OTA password and a fallback network.
-#if __has_include("wifi.h")
-#include "wifi.h"
-#endif
-
-// Updates over Wi-Fi need OTA_PASSWORD in include/wifi.h.
+// The Wi-Fi network is picked from the setup portal. Updates over Wi-Fi
+// need OTA_PASSWORD, set from the VMC_OTA_PASSWORD environment variable
+// at build time by scripts/ota_password.py.
 #ifndef OTA_PASSWORD
-#warning "OTA_PASSWORD is not defined in include/wifi.h: updates over Wi-Fi are disabled"
+#warning "VMC_OTA_PASSWORD is not set: updates over Wi-Fi are disabled"
 #endif
 
 #define PIN_LED 16
@@ -200,14 +196,6 @@ void setupWiFi()
   WiFi.hostname("vmc");
   WiFi.mode(WIFI_STA);
   static WiFiEventHandler onStationModeGotIPHandler = WiFi.onStationModeGotIP(onStationModeGotIP);
-
-#ifdef WIFI_SSID
-  // Nothing saved yet: start with the network from include/wifi.h.
-  if(WiFi.SSID() == "")
-  {
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  }
-#endif
 
   AsyncWiFiManager wifiManager(&webServer, &dnsServer);
   wifiManager.setConnectTimeout(wifi_connect_timeout);

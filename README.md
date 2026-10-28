@@ -182,9 +182,8 @@ Layout:
 ```
 ├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
 ├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
-├── include/
-│   ├── wifi.h.example   Template for the optional settings (OTA password, fallback network)
-│   └── wifi.h           Your copy (not in Git)
+├── scripts/
+│   └── ota_password.py  Reads the OTA password from VMC_OTA_PASSWORD
 └── data/                Files uploaded to LittleFS
     ├── index.html       Remote control page
     ├── script.js        Sends commands and refreshes the mode
@@ -205,29 +204,17 @@ How the firmware works (`src/main.cpp`):
 - VS Code with the PlatformIO extension, or PlatformIO Core on the command line.
 - A USB cable to flash the ESP.
 
-### 2. Optional settings (`include/wifi.h`)
+### 2. OTA password
 
-The Wi‑Fi network is chosen after flashing, from a setup portal (step 5), so no password needs to be compiled into the firmware. The file `include/wifi.h` is optional. It is still needed for updates over Wi‑Fi, and it can hold a fallback network. Copy the template, which is excluded from Git once copied:
+No password is stored in the project: the Wi‑Fi network is chosen after flashing, from a setup portal (step 5), and the password for updates over Wi‑Fi comes from the `VMC_OTA_PASSWORD` environment variable, read at build time by `scripts/ota_password.py`. Set it in the terminal before building:
 
 ```bash
-cp include/wifi.h.example include/wifi.h
+export VMC_OTA_PASSWORD="choose-a-password"   # PowerShell: $env:VMC_OTA_PASSWORD="choose-a-password"
 ```
 
-Then edit the copy:
+Without this variable, the firmware still builds (with a warning) but only accepts updates over USB. Use the same password for every build: the ESP asks for the one it was built with.
 
-```cpp
-#pragma once
-
-#define OTA_PASSWORD "OTA_PASSWORD"
-
-#define WIFI_SSID "NETWORK_NAME"
-#define WIFI_PASSWORD "PASSWORD"
-```
-
-- Without the `OTA_PASSWORD` line, the firmware still builds (with a warning) but only accepts updates over USB.
-- `WIFI_SSID` and `WIFI_PASSWORD` are only tried when no network is saved on the ESP yet (new board or erased flash). A network chosen in the portal always wins. Remove these two lines to use the portal only.
-
-> **Coming from an older version**: the old `const char *ssid` and `password` lines are no longer read. The ESP keeps the network it was already using (the Wi‑Fi chip saves it in flash), so nothing has to change. To keep a fallback, rename them to `WIFI_SSID` and `WIFI_PASSWORD` as above.
+> **Coming from an older version**: `include/wifi.h` is no longer read and can be deleted. The ESP keeps the network it was already using (the Wi‑Fi chip saves it in flash). Put the old `OTA_PASSWORD` value in `VMC_OTA_PASSWORD`.
 
 ### 3. Build and flash the firmware
 
@@ -263,10 +250,10 @@ The serial monitor (115200 baud) shows the list of LittleFS files, the Wi‑Fi m
 
 ### 6. Updates over Wi‑Fi (OTA)
 
-Once the first flash over USB is done and the ESP is on Wi‑Fi, the next updates can go over the network, without opening the enclosure. The ESP announces itself as `vmc.local` (mDNS) and asks for the `OTA_PASSWORD` from `include/wifi.h`:
+Once the first flash over USB is done and the ESP is on Wi‑Fi, the next updates can go over the network, without opening the enclosure. The ESP announces itself as `vmc.local` (mDNS) and asks for the password it was built with (`VMC_OTA_PASSWORD`, see step 2):
 
 ```bash
-export PLATFORMIO_UPLOAD_FLAGS="--auth=OTA_PASSWORD"   # your OTA password
+export PLATFORMIO_UPLOAD_FLAGS="--auth=$VMC_OTA_PASSWORD"
 pio run --target upload --upload-port vmc.local        # firmware
 pio run --target uploadfs --upload-port vmc.local      # web interface
 ```
@@ -292,7 +279,7 @@ pio test -e native
 - that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
 - that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
 - that pages are served from LittleFS and that an unknown URL answers `404`.
-- that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that the `wifi.h` fallback network is only used when nothing is saved, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
+- that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
 The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for both ESP boards (production and test).

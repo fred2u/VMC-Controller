@@ -3,4 +3,5 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# Old Wi-Fi credentials file (no longer used): keep it out of Git.
 include/wifi.h

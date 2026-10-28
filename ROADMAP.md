@@ -75,7 +75,7 @@ GPIO2 and GPIO15 are also used to select the ESP8266 boot mode. If the remote's 
 
 ### ✅ Wi‑Fi setup with a library
 
-~~The network name and password were hard-coded in `include/wifi.h`.~~ [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager) is in place: when the ESP cannot reach a saved network, it opens the `VMC-Setup` access point with a captive portal for 3 minutes, see "Connect to Wi‑Fi" in the README. `include/wifi.h` is now optional (OTA password and fallback network).
+~~The network name and password were hard-coded in `include/wifi.h`.~~ [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager) is in place: when the ESP cannot reach a saved network, it opens the `VMC-Setup` access point with a captive portal for 3 minutes, see "Connect to Wi‑Fi" in the README. `include/wifi.h` is gone: the OTA password comes from the `VMC_OTA_PASSWORD` environment variable at build time.
 
 Still to do:
 
@@ -84,7 +84,7 @@ Still to do:
 
 ### ✅ Updates over Wi‑Fi (OTA)
 
-~~Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.~~ ArduinoOTA is in place, protected by `OTA_PASSWORD`, see the README. A web update page (`/update`) could still be added, to update without PlatformIO.
+~~Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.~~ ArduinoOTA is in place, protected by a password (`VMC_OTA_PASSWORD`), see the README. A web update page (`/update`) could still be added, to update without PlatformIO.
 
 ### 🟠 Native Home Assistant integration
 

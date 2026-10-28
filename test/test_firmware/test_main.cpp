@@ -55,6 +55,8 @@ void delay(unsigned long ms)
 time_t fake_time(time_t *) { return fake::nowEpoch; }
 
 // ----- the firmware under test (unchanged) ---------------------------------
+// On the ESP, scripts/ota_password.py sets this from VMC_OTA_PASSWORD.
+#define OTA_PASSWORD "test-ota-password"
 #include "../../src/main.cpp"
 
 // ----- helpers -------------------------------------------------------------
@@ -149,17 +151,12 @@ void test_wifi_manager_opens_vmc_setup_with_timeouts()
   TEST_ASSERT_EQUAL(180, wifiManagerState.portalTimeout);
 }
 
-void test_first_boot_tries_the_network_from_wifi_h()
+void test_no_network_is_compiled_into_the_firmware()
 {
+  // A new board goes straight to the portal, with no built-in network.
   boot("");
-  TEST_ASSERT_EQUAL_STRING("test-ssid", WiFi.ssidUsed.c_str());
-}
-
-void test_a_saved_network_wins_over_wifi_h()
-{
-  boot("home-network");
   TEST_ASSERT_EQUAL_STRING("", WiFi.ssidUsed.c_str());
-  TEST_ASSERT_EQUAL_STRING("home-network", WiFi.SSID().c_str());
+  TEST_ASSERT_EQUAL(1, wifiManagerState.autoConnectCount);
 }
 
 void test_routes_are_added_after_the_setup_portal()
@@ -433,8 +430,7 @@ int main(int, char **)
   RUN_TEST(test_setup_puts_every_button_pin_in_output_and_released);
   RUN_TEST(test_setup_connects_wifi_with_hostname_vmc);
   RUN_TEST(test_wifi_manager_opens_vmc_setup_with_timeouts);
-  RUN_TEST(test_first_boot_tries_the_network_from_wifi_h);
-  RUN_TEST(test_a_saved_network_wins_over_wifi_h);
+  RUN_TEST(test_no_network_is_compiled_into_the_firmware);
   RUN_TEST(test_routes_are_added_after_the_setup_portal);
   RUN_TEST(test_without_wifi_the_esp_retries_and_still_sends_medium);
   RUN_TEST(test_with_wifi_the_saved_network_is_not_restarted);
