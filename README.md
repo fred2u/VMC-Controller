@@ -259,7 +259,7 @@ pio run --target uploadfs --upload-port vmc.local      # web interface
 
 Add `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
 
-The production board (ESP‑Mx DevKit) only has 1 MB of flash, 256 KB of which hold the web interface. An update over Wi‑Fi needs room for the old and the new firmware at the same time: if the build is larger than about half of the remaining space, the ESP refuses the update and USB is still needed.
+The production board (ESP‑Mx DevKit) only has 1 MB of flash, 256 KB of which hold the web interface. An update over Wi‑Fi needs room for the old and the new firmware at the same time, that is about 380 KB each out of the 744 KB left. The current firmware (about 368 KB) fits, with only a few KB to spare: if a later version grows past that, the ESP refuses the update and USB is needed again. The NodeMCU (4 MB) has plenty of room.
 
 ## Tests
 
