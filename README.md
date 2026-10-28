@@ -273,7 +273,9 @@ pio run --target uploadfs --upload-port vmc.local      # web interface
 
 Add `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
 
-The production board (ESP‑Mx DevKit) only has 1 MB of flash, 256 KB of which hold the web interface. An update over Wi‑Fi needs room for the old and the new firmware at the same time, that is about 380 KB each out of the 744 KB left. The current firmware (about 368 KB) fits, with only a few KB to spare: if a later version grows past that, the ESP refuses the update and USB is needed again. The NodeMCU (4 MB) has plenty of room.
+The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 28 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
+
+> **Coming from v1.0**: the flash layout of the production board changed (LittleFS moved). Flash it once over USB, firmware **and** web interface (`upload` then `uploadfs`); the next updates can go over Wi‑Fi.
 
 ## Tests
 
