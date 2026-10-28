@@ -171,7 +171,8 @@ The Gerber files are in [`hardware/pcb/gerber/`](hardware/pcb/gerber/). They can
 |---|---|
 | Environment | [PlatformIO](https://platformio.org/) (VS Code extension recommended in `.vscode/extensions.json`) |
 | Framework | Arduino for ESP8266 (`espressif8266`) |
-| Web server | [ESP Async WebServer](https://github.com/me-no-dev/ESPAsyncWebServer) |
+| Web server | [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) and [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP), maintained by ESP32Async, versions pinned in `platformio.ini` |
+| Updates over Wi‑Fi | ArduinoOTA (included in the Arduino core) |
 | File system | LittleFS (web pages stored in flash) |
 | Interface | Plain HTML and JavaScript, [Milligram](https://milligram.io/) CSS |
 
@@ -211,14 +212,18 @@ Copy the template `include/wifi.h.example` to `include/wifi.h`, which is exclude
 cp include/wifi.h.example include/wifi.h
 ```
 
-Then put your network name and password in the copy:
+Then put your network name and password in the copy, and choose a password for updates over Wi‑Fi:
 
 ```cpp
 #pragma once
 
 const char *ssid = "NETWORK_NAME";
 const char *password = "PASSWORD";
+
+#define OTA_PASSWORD "OTA_PASSWORD"
 ```
+
+Without the `OTA_PASSWORD` line, the firmware still builds (with a warning) but only accepts updates over USB.
 
 ### 3. Build and flash the firmware
 
@@ -242,6 +247,20 @@ pio device monitor
 
 The serial monitor (115200 baud) shows the list of LittleFS files, then the IP address obtained. The page is then available at `http://vmc/` (if your router resolves hostnames) or `http://<ip-address>/`. It is a good idea to reserve a fixed IP address for the ESP in the router, especially for Home Assistant.
 
+### 6. Updates over Wi‑Fi (OTA)
+
+Once the first flash over USB is done and the ESP is on Wi‑Fi, the next updates can go over the network, without opening the enclosure. The ESP announces itself as `vmc.local` (mDNS) and asks for the `OTA_PASSWORD` from `include/wifi.h`:
+
+```bash
+export PLATFORMIO_UPLOAD_FLAGS="--auth=OTA_PASSWORD"   # your OTA password
+pio run --target upload --upload-port vmc.local        # firmware
+pio run --target uploadfs --upload-port vmc.local      # web interface
+```
+
+Add `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
+
+The production board (ESP‑Mx DevKit) only has 1 MB of flash, 256 KB of which hold the web interface. An update over Wi‑Fi needs room for the old and the new firmware at the same time, that is about 380 KB each out of the 744 KB left. The current firmware (about 368 KB) fits, with only a few KB to spare: if a later version grows past that, the ESP refuses the update and USB is needed again. The NodeMCU (4 MB) has plenty of room.
+
 ## Tests
 
 Unit tests check the firmware on the computer, without an ESP or a remote:
@@ -257,6 +276,7 @@ pio test -e native
 - that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
 - that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
 - that pages are served from LittleFS and that an unknown URL answers `404`.
+- that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
 The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for both ESP boards (production and test).
 
@@ -392,11 +412,11 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 - **Max mode duration**: the ESP computes the end of the Max mode with the internal clock (`time(0)`), without NTP sync. This is enough for a relative duration, but has not been checked in detail.
 - **Max ignored in High**: Max commands are silently ignored if the current mode is High.
 - **Requests close together**: only one command is stored at a time, and it is cleared once it has run. A command received while another one is being sent (up to about 3 seconds for Max 60 min) can therefore be lost.
-- **Updates**: the firmware can only be updated over USB (no OTA).
+- **Updates over Wi‑Fi**: protected by a password, but sent unencrypted over the local network.
 
 ## Ideas for improvement
 
-What the project is missing (pairing from the interface, reset button, Wi‑Fi setup, more compact version, OTA, MQTT…) is detailed in the [roadmap](ROADMAP.md).
+What the project is missing (pairing from the interface, reset button, Wi‑Fi setup, more compact version, MQTT…) is detailed in the [roadmap](ROADMAP.md).
 
 ## License
 

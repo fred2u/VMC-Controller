@@ -11,7 +11,10 @@ public:
 class FakeLittleFS
 {
 public:
-  bool begin() { return true; }
+  bool begin() { mounted = true; return true; }
+  void end() { mounted = false; }
   Dir openDir(const char *) { return Dir(); }
+
+  bool mounted = false;
 };
 extern FakeLittleFS LittleFS;

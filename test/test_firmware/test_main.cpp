@@ -7,11 +7,13 @@
 
 #include <unity.h>
 #include "ESPAsyncWebServer.h"
+#include "ArduinoOTA.h"
 
 // ----- fake hardware state -------------------------------------------------
 FakeSerial Serial;
 FakeWiFi WiFi;
 FakeLittleFS LittleFS;
+FakeArduinoOTA ArduinoOTA;
 
 namespace fake
 {
@@ -63,6 +65,9 @@ static void boot()
   currentMode = "";
   tempMode = "";
   tempModeExpire = 0;
+  otaStarted = false;
+  ArduinoOTA.reset();
+  WiFi.statusValue = WL_DISCONNECTED;
   webServer.routes.clear();
   webServer.notFound = nullptr;
   setup();
@@ -317,6 +322,56 @@ void test_unknown_url_answers_404_and_presses_nothing()
   TEST_ASSERT_EQUAL(0, pressCountOnButtons());
 }
 
+// ----- updates over Wi-Fi (OTA) -------------------------------------------
+
+void test_ota_waits_for_the_wifi_connection()
+{
+  loop();
+  TEST_ASSERT_EQUAL(0, ArduinoOTA.beginCount);
+  TEST_ASSERT_EQUAL(0, ArduinoOTA.handleCount);
+}
+
+void test_ota_starts_once_with_hostname_and_password_when_wifi_is_up()
+{
+  WiFi.statusValue = WL_CONNECTED;
+  loop();
+  loop();
+  TEST_ASSERT_EQUAL(1, ArduinoOTA.beginCount);
+  TEST_ASSERT_EQUAL_STRING("vmc", ArduinoOTA.hostname.c_str());
+  TEST_ASSERT_EQUAL_STRING("test-ota-password", ArduinoOTA.password.c_str());
+}
+
+void test_ota_is_handled_on_every_loop_even_without_a_command()
+{
+  WiFi.statusValue = WL_CONNECTED;
+  loop();
+  loop();
+  loop();
+  TEST_ASSERT_EQUAL(3, ArduinoOTA.handleCount);
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+}
+
+void test_ota_keeps_running_if_wifi_drops()
+{
+  WiFi.statusValue = WL_CONNECTED;
+  loop();
+  WiFi.statusValue = WL_DISCONNECTED;
+  loop();
+  TEST_ASSERT_EQUAL(1, ArduinoOTA.beginCount);
+  TEST_ASSERT_EQUAL(2, ArduinoOTA.handleCount);
+}
+
+void test_ota_unmounts_littlefs_before_a_web_interface_update()
+{
+  WiFi.statusValue = WL_CONNECTED;
+  loop();
+  TEST_ASSERT_TRUE(LittleFS.mounted);
+  ArduinoOTA.simulateStart(U_FLASH);
+  TEST_ASSERT_TRUE(LittleFS.mounted);
+  ArduinoOTA.simulateStart(U_FS);
+  TEST_ASSERT_FALSE(LittleFS.mounted);
+}
+
 int main(int, char **)
 {
   UNITY_BEGIN();
@@ -338,5 +393,10 @@ int main(int, char **)
   RUN_TEST(test_pages_are_served_from_littlefs);
   RUN_TEST(test_mode_answers_plain_text);
   RUN_TEST(test_unknown_url_answers_404_and_presses_nothing);
+  RUN_TEST(test_ota_waits_for_the_wifi_connection);
+  RUN_TEST(test_ota_starts_once_with_hostname_and_password_when_wifi_is_up);
+  RUN_TEST(test_ota_is_handled_on_every_loop_even_without_a_command);
+  RUN_TEST(test_ota_keeps_running_if_wifi_drops);
+  RUN_TEST(test_ota_unmounts_littlefs_before_a_web_interface_update);
   return UNITY_END();
 }

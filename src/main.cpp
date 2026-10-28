@@ -1,7 +1,13 @@
 #include <Arduino.h>
+#include <ArduinoOTA.h>
 #include <ESPAsyncWebServer.h>
 #include "LittleFS.h"
 #include "wifi.h"
+
+// Updates over Wi-Fi need OTA_PASSWORD in include/wifi.h.
+#ifndef OTA_PASSWORD
+#warning "OTA_PASSWORD is not defined in include/wifi.h: updates over Wi-Fi are disabled"
+#endif
 
 #define PIN_LED 16
 #define PIN_DEFAULT 12 // 4
@@ -43,12 +49,14 @@ void handleMode(AsyncWebServerRequest *request);
 void sendCommand(int pin, String mode);
 void sendTempCommand(int pin, int count, String tempMode, int tempDelay);
 void sendCommand(int pin);
+void handleOTA();
 
 AsyncWebServer webServer(80);
 String command = "";
 String currentMode = "";
 String tempMode = "";
 time_t tempModeExpire = 0;
+bool otaStarted = false;
 
 void setup()
 {
@@ -114,6 +122,8 @@ void setup()
 
 void loop()
 {
+  handleOTA();
+
   if(tempModeExpire > 0 && tempModeExpire < time(0))
   {
     tempModeExpire = 0;
@@ -243,4 +253,32 @@ void sendCommand(int pin)
   digitalWrite(pin, LOW);
   delay(command_delay);
   digitalWrite(pin, HIGH);
+}
+
+// Starts OTA once Wi-Fi is up, then listens for updates on every loop.
+void handleOTA()
+{
+#ifdef OTA_PASSWORD
+  if(!otaStarted)
+  {
+    if(WiFi.status() != WL_CONNECTED)
+    {
+      return;
+    }
+    ArduinoOTA.setHostname("vmc");
+    ArduinoOTA.setPassword(OTA_PASSWORD);
+    ArduinoOTA.onStart([]()
+    {
+      // The web interface image replaces the file system: unmount it first.
+      if(ArduinoOTA.getCommand() == U_FS)
+      {
+        LittleFS.end();
+      }
+      Serial.println("OTA update started");
+    });
+    ArduinoOTA.begin();
+    otaStarted = true;
+  }
+  ArduinoOTA.handle();
+#endif
 }

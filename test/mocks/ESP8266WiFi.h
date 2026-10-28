@@ -2,6 +2,8 @@
 #include "Arduino.h"
 
 #define WIFI_STA 1
+#define WL_CONNECTED 3
+#define WL_DISCONNECTED 7
 
 struct WiFiEventStationModeGotIP
 {
@@ -20,9 +22,11 @@ public:
   template <typename F>
   WiFiEventHandler onStationModeGotIP(F) { return WiFiEventHandler(); }
   IPAddress localIP() { return IPAddress(); }
+  int status() { return statusValue; }
 
   String hostnameSet;
   String ssidUsed;
   int modeSet = 0;
+  int statusValue = WL_DISCONNECTED;
 };
 extern FakeWiFi WiFi;
