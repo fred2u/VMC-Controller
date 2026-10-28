@@ -8,12 +8,14 @@
 #include <unity.h>
 #include "ESPAsyncWebServer.h"
 #include "ArduinoOTA.h"
+#include "ESPAsyncWiFiManager.h"
 
 // ----- fake hardware state -------------------------------------------------
 FakeSerial Serial;
 FakeWiFi WiFi;
 FakeLittleFS LittleFS;
 FakeArduinoOTA ArduinoOTA;
+FakeWiFiManagerState wifiManagerState;
 
 namespace fake
 {
@@ -53,12 +55,16 @@ void delay(unsigned long ms)
 time_t fake_time(time_t *) { return fake::nowEpoch; }
 
 // ----- the firmware under test (unchanged) ---------------------------------
+// On the ESP, scripts/ota_password.py sets this from VMC_OTA_PASSWORD.
+#define OTA_PASSWORD "test-ota-password"
 #include "../../src/main.cpp"
 
 // ----- helpers -------------------------------------------------------------
 
 // Put the firmware back in its power-on state and run setup().
-static void boot()
+// savedSsid: network already saved in flash. wifiConnects: whether the
+// Wi-Fi manager gets a connection (otherwise its portal times out).
+static void boot(const char *savedSsid = "", bool wifiConnects = true)
 {
   fake::reset();
   command = "";
@@ -67,7 +73,10 @@ static void boot()
   tempModeExpire = 0;
   otaStarted = false;
   ArduinoOTA.reset();
-  WiFi.statusValue = WL_DISCONNECTED;
+  WiFi = FakeWiFi();
+  WiFi.savedSsid = savedSsid;
+  wifiManagerState.reset();
+  wifiManagerState.connects = wifiConnects;
   webServer.routes.clear();
   webServer.notFound = nullptr;
   setup();
@@ -127,9 +136,52 @@ void test_setup_connects_wifi_with_hostname_vmc()
   boot();
   TEST_ASSERT_EQUAL_STRING("vmc", WiFi.hostnameSet.c_str());
   TEST_ASSERT_EQUAL(WIFI_STA, WiFi.modeSet);
-  TEST_ASSERT_EQUAL_STRING("test-ssid", WiFi.ssidUsed.c_str());
   TEST_ASSERT_TRUE(webServer.started);
   TEST_ASSERT_EQUAL(80, webServer.port);
+}
+
+// ----- Wi-Fi setup portal --------------------------------------------------
+
+void test_wifi_manager_opens_vmc_setup_with_timeouts()
+{
+  boot();
+  TEST_ASSERT_EQUAL(1, wifiManagerState.autoConnectCount);
+  TEST_ASSERT_EQUAL_STRING("VMC-Setup", wifiManagerState.apName.c_str());
+  TEST_ASSERT_EQUAL(30, wifiManagerState.connectTimeout);
+  TEST_ASSERT_EQUAL(180, wifiManagerState.portalTimeout);
+}
+
+void test_no_network_is_compiled_into_the_firmware()
+{
+  // A new board goes straight to the portal, with no built-in network.
+  boot("");
+  TEST_ASSERT_EQUAL_STRING("", WiFi.ssidUsed.c_str());
+  TEST_ASSERT_EQUAL(1, wifiManagerState.autoConnectCount);
+}
+
+void test_routes_are_added_after_the_setup_portal()
+{
+  // The real portal clears the web server when it closes.
+  boot();
+  TEST_ASSERT_EQUAL(0, wifiManagerState.routesBeforeAutoConnect);
+  TEST_ASSERT_EQUAL(200, webServer.request("/mode").status);
+  TEST_ASSERT_EQUAL(404, webServer.request("/nope").status);
+}
+
+void test_without_wifi_the_esp_retries_and_still_sends_medium()
+{
+  boot("home-network", false);
+  TEST_ASSERT_EQUAL(WIFI_STA, WiFi.modeSet);
+  TEST_ASSERT_EQUAL(1, WiFi.beginSavedCount);
+  TEST_ASSERT_TRUE(webServer.started);
+  loop();
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_MEDIUM));
+}
+
+void test_with_wifi_the_saved_network_is_not_restarted()
+{
+  boot("home-network", true);
+  TEST_ASSERT_EQUAL(0, WiFi.beginSavedCount);
 }
 
 void test_mode_is_empty_before_the_first_command()
@@ -377,6 +429,11 @@ int main(int, char **)
   UNITY_BEGIN();
   RUN_TEST(test_setup_puts_every_button_pin_in_output_and_released);
   RUN_TEST(test_setup_connects_wifi_with_hostname_vmc);
+  RUN_TEST(test_wifi_manager_opens_vmc_setup_with_timeouts);
+  RUN_TEST(test_no_network_is_compiled_into_the_firmware);
+  RUN_TEST(test_routes_are_added_after_the_setup_portal);
+  RUN_TEST(test_without_wifi_the_esp_retries_and_still_sends_medium);
+  RUN_TEST(test_with_wifi_the_saved_network_is_not_restarted);
   RUN_TEST(test_mode_is_empty_before_the_first_command);
   RUN_TEST(test_boot_sends_medium);
   RUN_TEST(test_each_mode_presses_its_own_button);

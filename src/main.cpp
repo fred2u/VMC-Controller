@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <ESPAsyncWebServer.h>
+#include <ESPAsyncWiFiManager.h>
 #include "LittleFS.h"
-#include "wifi.h"
 
-// Updates over Wi-Fi need OTA_PASSWORD in include/wifi.h.
+// The Wi-Fi network is picked from the setup portal. Updates over Wi-Fi
+// need OTA_PASSWORD, set from the VMC_OTA_PASSWORD environment variable
+// at build time by scripts/ota_password.py.
 #ifndef OTA_PASSWORD
-#warning "OTA_PASSWORD is not defined in include/wifi.h: updates over Wi-Fi are disabled"
+#warning "VMC_OTA_PASSWORD is not set: updates over Wi-Fi are disabled"
 #endif
 
 #define PIN_LED 16
@@ -35,6 +37,12 @@ const char *command_max1 = "/max1";
 const char *command_max2 = "/max2";
 const char *command_max3 = "/max3";
 
+// Access point opened when the ESP cannot join a network, and how long
+// the ESP waits for the network and for someone to use the portal.
+const char *setup_ap_name = "VMC-Setup";
+const int wifi_connect_timeout = 30; // seconds
+const int setup_portal_timeout = 180; // seconds
+
 const int between_command_delay = 600;
 const int command_delay = 500;
 
@@ -50,8 +58,10 @@ void sendCommand(int pin, String mode);
 void sendTempCommand(int pin, int count, String tempMode, int tempDelay);
 void sendCommand(int pin);
 void handleOTA();
+void setupWiFi();
 
 AsyncWebServer webServer(80);
+DNSServer dnsServer;
 String command = "";
 String currentMode = "";
 String tempMode = "";
@@ -65,12 +75,6 @@ void setup()
   Serial.println();
   Serial.println("Open Serial");
 
-  // WiFi
-  WiFi.hostname("vmc");
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  static WiFiEventHandler onStationModeGotIPHandler = WiFi.onStationModeGotIP(onStationModeGotIP);
-  
   // GPIO
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, HIGH);  
@@ -97,6 +101,9 @@ void setup()
       Serial.println("- " + root.fileName());
     }
   }
+
+  // WiFi, before the routes: the setup portal clears the web server.
+  setupWiFi();
 
   // Web Server
   webServer.on("/", handleDefault);
@@ -178,6 +185,27 @@ void loop()
   command = ""; 
 
   digitalWrite(PIN_LED, HIGH);  
+}
+
+// Joins the saved Wi-Fi network. If it cannot be reached (first boot, new
+// router...), opens the VMC-Setup access point with a portal to pick the
+// network. The portal keeps retrying the saved network every few seconds and
+// closes after setup_portal_timeout; the ESP then keeps retrying on its own.
+void setupWiFi()
+{
+  WiFi.hostname("vmc");
+  WiFi.mode(WIFI_STA);
+  static WiFiEventHandler onStationModeGotIPHandler = WiFi.onStationModeGotIP(onStationModeGotIP);
+
+  AsyncWiFiManager wifiManager(&webServer, &dnsServer);
+  wifiManager.setConnectTimeout(wifi_connect_timeout);
+  wifiManager.setConfigPortalTimeout(setup_portal_timeout);
+  if(!wifiManager.autoConnect(setup_ap_name))
+  {
+    Serial.println("No Wi-Fi network, retrying in the background");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin();
+  }
 }
 
 void onStationModeGotIP(const WiFiEventStationModeGotIP& event)

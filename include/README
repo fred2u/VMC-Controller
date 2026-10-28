@@ -1,6 +1,5 @@
-Project header files.
+Project header files (none today).
 
-- wifi.h.example : template for the Wi-Fi credentials. Copy it to wifi.h
-  and fill in your network name and password.
-- wifi.h : your copy, excluded from Git (see .gitignore). The firmware does
-  not build without it.
+The Wi-Fi network is chosen from the VMC-Setup portal and the OTA password
+comes from the VMC_OTA_PASSWORD environment variable, so no file holds a
+password. See the README.
