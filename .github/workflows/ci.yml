@@ -17,8 +17,13 @@ jobs:
       - run: pio test -e native
 
   build:
-    name: Firmware build (ESP8285)
+    name: Firmware build (${{ matrix.env }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # espmxdevkit: production board (ESP8285). nodemcuv2: test board.
+        env: [espmxdevkit, nodemcuv2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,6 +32,6 @@ jobs:
       - run: pip install platformio
       # include/wifi.h is gitignored (it holds the Wi-Fi password).
       - run: cp include/wifi.h.example include/wifi.h
-      - run: pio run -e espmxdevkit
+      - run: pio run -e ${{ matrix.env }}
       # Check that the data/ folder still packs into a LittleFS image.
-      - run: pio run -e espmxdevkit --target buildfs
+      - run: pio run -e ${{ matrix.env }} --target buildfs
