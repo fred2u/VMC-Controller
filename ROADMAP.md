@@ -9,6 +9,7 @@ Les points sont regroupés par thème. La priorité indique l'intérêt pour que
 | 🔴 Haute | Manque gênant à l'installation ou en cas de panne |
 | 🟠 Moyenne | Amélioration nette du confort ou de la fiabilité |
 | 🟢 Basse | Finition |
+| ✅ | Fait |
 
 ---
 
@@ -103,6 +104,8 @@ Aujourd'hui, l'intégration passe par une configuration `rest_command` manuelle.
 
 Le mode affiché est celui de la dernière commande envoyée par l'ESP, et il n'est pas lu sur la VMC. Une commande envoyée par une autre télécommande, ou le retour en mode auto après une coupure de courant, ne sont pas vus. C'est une limite du montage, puisque la télécommande ne reçoit rien. Il faut au moins l'indiquer dans l'interface (« dernier mode envoyé »).
 
+✅ L'interface affiche maintenant « Last mode sent » au lieu de « Current mode ». La limite elle‑même reste.
+
 ### 🟢 Sécurité
 
 Aucune authentification n'est en place. C'est acceptable sur un réseau local de confiance, mais il faudrait au minimum une authentification HTTP basique en option, surtout si l'OTA est ajouté, puisqu'elle permettrait de remplacer le firmware.
@@ -111,9 +114,11 @@ Aucune authentification n'est en place. C'est acceptable sur un réseau local de
 
 ## 4. Interface web
 
-- 🟢 Uniformiser la langue : les boutons sont en anglais (« Low », « Medium », « High »), sauf « Automatique », et la page est déclarée en français.
-- 🟢 Mettre en évidence le mode actif sur le bouton correspondant, en plus du texte « Current mode ».
-- 🟢 Corriger une faute de frappe dans `data/style.css` : `margin: 0 10px O O;` utilise la lettre `O` au lieu du chiffre `0`, ce qui rend la règle invalide.
+- ✅ ~~Uniformiser la langue : les boutons sont en anglais (« Low », « Medium », « High »), sauf « Automatique », et la page est déclarée en français.~~ Tout est en anglais : « Automatique » devient « Auto » (aussi dans la réponse de `/mode`) et la page est déclarée en anglais.
+- ✅ ~~Mettre en évidence le mode actif sur le bouton correspondant, en plus du texte « Current mode ».~~ Le bouton du mode actif est rempli.
+- ✅ ~~Corriger une faute de frappe dans `data/style.css` : `margin: 0 10px O O;` utilise la lettre `O` au lieu du chiffre `0`, ce qui rend la règle invalide.~~ Remplacé par `margin: 0 10px;`.
+- ✅ Afficher le mode dès l'ouverture de la page, sans attendre le premier rafraîchissement de 2 secondes.
+- ✅ Corriger la balise `<meta>` de `index.html`, où `charset` était collé à l'attribut `viewport` et donc ignoré.
 - 🟢 Ajouter une page « Maintenance » : appairage, réinitialisation, informations système (version, adresse IP, force du signal Wi‑Fi, temps de fonctionnement).
 
 ---
@@ -121,6 +126,6 @@ Aucune authentification n'est en place. C'est acceptable sur un réseau local de
 ## 5. Projet et documentation
 
 - 🟠 Ajouter un schéma électrique, par exemple exporté depuis EasyEDA, en plus du PCB.
-- 🟢 Ajouter une vérification de compilation automatique (GitHub Actions avec PlatformIO), pour s'assurer que le firmware compile toujours avec les versions récentes des librairies.
-- 🟢 Fixer la version de la librairie ESP Async WebServer dans `platformio.ini`. Sans version, une mise à jour de la librairie peut casser la compilation.
+- ✅ ~~Ajouter une vérification de compilation automatique (GitHub Actions avec PlatformIO), pour s'assurer que le firmware compile toujours avec les versions récentes des librairies.~~ Fait avec les tests unitaires (`.github/workflows/ci.yml`).
+- ✅ ~~Fixer la version de la librairie ESP Async WebServer dans `platformio.ini`. Sans version, une mise à jour de la librairie peut casser la compilation.~~ Fait : les dépôts GitHub sont épinglés sur un commit précis.
 - 🟢 Numéroter les versions du firmware (tags Git) et afficher la version dans l'interface.

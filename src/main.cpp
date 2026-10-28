@@ -12,7 +12,7 @@
 #define PIN_MAX 14 // 6
 
 const char *mode_default = "Default";
-const char *mode_auto = "Automatique";
+const char *mode_auto = "Auto";
 const char *mode_low = "Low";
 const char *mode_medium = "Medium";
 const char *mode_high = "High";
