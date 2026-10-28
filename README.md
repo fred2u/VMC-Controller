@@ -265,14 +265,27 @@ The serial monitor (115200 baud) shows the list of LittleFS files, the Wi‑Fi m
 
 Once the first flash over USB is done and the ESP is on Wi‑Fi, the next updates can go over the network, without opening the enclosure. The ESP announces itself as `vmc.local` (mDNS) and asks for the password it was built with (`VMC_OTA_PASSWORD`, see step 2):
 
+Each board has a second environment, ending in `_ota`, that always uploads over Wi‑Fi:
+
 ```bash
-pio run -e espmxdevkit --target upload --upload-port vmc.local     # firmware
-pio run -e espmxdevkit --target uploadfs --upload-port vmc.local   # web interface
+pio run -e espmxdevkit_ota --target upload     # firmware, to vmc.local
+pio run -e espmxdevkit_ota --target uploadfs   # web interface
+pio run -e nodemcuv2_ota --target upload       # test board, to vmc-test.local
+pio run -e nodemcuv2_ota --target uploadfs
 ```
+
+The commands are the same in PowerShell and in a Linux or macOS terminal. If the `.local` name does not resolve, give another name or the IP address with `--upload-port`, for example the name from your router:
+
+```powershell
+pio run -e nodemcuv2_ota --target upload --upload-port vmc-test.lan
+pio run -e nodemcuv2_ota --target upload --upload-port 192.168.1.42
+```
+
+Keep the `_ota` environment for these. Without it (`-e nodemcuv2`), PlatformIO only switches to Wi‑Fi for an IP address or a name ending in `.local`. Any other name is taken for a serial port, and the upload fails with `could not open port 'vmc-test.lan'`.
 
 With `VMC_OTA_PASSWORD` set, `scripts/ota_auth.py` gives the password to the upload over Wi‑Fi by itself, so there is nothing else to set. Do not put `--auth` in `PLATFORMIO_UPLOAD_FLAGS`: that variable also applies to USB uploads, which then fail with `esptool: error: unrecognized arguments: --auth=...` (in PowerShell, clear it with `Remove-Item Env:PLATFORMIO_UPLOAD_FLAGS`).
 
-Use `-e nodemcuv2` for the test board, which announces itself as `vmc-test.local` instead (see [Test board](#test-board-nodemcu)). If the name does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
+The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port; on Windows, allow Python when the firewall asks).
 
 The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 28 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
 
@@ -312,7 +325,7 @@ pio device monitor
 
 `pio run` without `-e` still builds the production board (`espmxdevkit`) only.
 
-The test board uses its own network name, `vmc-test` (`http://vmc-test/`, `vmc-test.local` for OTA), set by `build_flags` in `platformio.ini`. Both boards can then be on the same Wi‑Fi at the same time: with the same name, the router hands `vmc` to whichever board connected last, and `http://vmc/` and Home Assistant lose the production board. If a test build ever went out with the name `vmc`, remove the old `vmc` entry for the NodeMCU in the router, and restart the production ESP so that it registers its name again.
+The test board uses its own network name, `vmc-test` (`http://vmc-test/`, `vmc-test.local` for OTA with `-e nodemcuv2_ota`), set by `build_flags` in `platformio.ini`. Both boards can then be on the same Wi‑Fi at the same time: with the same name, the router hands `vmc` to whichever board connected last, and `http://vmc/` and Home Assistant lose the production board. If a test build ever went out with the name `vmc`, remove the old `vmc` entry for the NodeMCU in the router, and restart the production ESP so that it registers its name again.
 
 A NodeMCU labels its pins `D0`…`D8` instead of GPIO numbers:
 
@@ -455,6 +468,7 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 | `Connection established` never shows | The Wi‑Fi network or password has changed (new Internet box, for example). Restart the ESP: it cannot reach the old network, so it opens the `VMC-Setup` portal for 3 minutes, see [Connect to Wi‑Fi](#5-connect-to-wifi). |
 | The `VMC-Setup` access point does not show | The ESP reached its saved network, or the 3 minutes are over: restart it. To force the portal while the old network still works, erase the flash (`pio run --target erase`) and flash again. |
 | The page is blank or returns an error, but `/mode` answers | The LittleFS file list is empty in the serial monitor: upload the interface with `pio run --target uploadfs`. |
+| An upload over Wi‑Fi fails with `could not open port '...'` | PlatformIO took the name for a serial port. Use the `_ota` environment (`-e nodemcuv2_ota` or `-e espmxdevkit_ota`), see [Updates over Wi‑Fi](#6-updates-over-wifi-ota). |
 | The ESP does not start after a wiring change | Check GPIO2 (must be HIGH at boot) and GPIO15 (must be LOW at boot), see [Wiring](#wiring). |
 | The ESP LED (GPIO16) lights up during a command, but the ventilation unit does not react | Check the FFC cable and breakout, and the 3 V power to the remote's battery holder. If the remote board is powered and connected, it may no longer be paired (after replacing or resetting the unit, for example): pair it again, see [How the ventilation unit works](#how-the-ventilation-unit-works). |
 | The mode shown does not match the ventilation unit | Expected: the ESP only knows the last mode it sent, see [Known limitations](#known-limitations). |
