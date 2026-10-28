@@ -13,14 +13,15 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 1. [Principe](#principe)
 2. [Matériel](#matériel)
 3. [Câblage](#câblage)
-4. [Logiciel](#logiciel)
-5. [Installation](#installation)
-6. [Utilisation](#utilisation)
-7. [API HTTP](#api-http)
-8. [Intégration Home Assistant](#intégration-home-assistant)
-9. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
-10. [Limites connues](#limites-connues)
-11. [Pistes d'amélioration](#pistes-damélioration)
+4. [Photos de la télécommande](#photos-de-la-télécommande)
+5. [Logiciel](#logiciel)
+6. [Installation](#installation)
+7. [Utilisation](#utilisation)
+8. [API HTTP](#api-http)
+9. [Intégration Home Assistant](#intégration-home-assistant)
+10. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
+11. [Limites connues](#limites-connues)
+12. [Pistes d'amélioration](#pistes-damélioration)
 
 ---
 
@@ -41,7 +42,7 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 - L'ESP8266 se connecte au Wi‑Fi de la maison et sert une petite page web.
 - Chaque bouton de la page correspond à un bouton de la télécommande. L'ESP met la sortie correspondante à l'état bas pendant 500 ms, ce qui simule un appui.
 - La carte de la télécommande émet ensuite la commande radio vers la VMC, comme si on avait appuyé sur le bouton.
-- L'ESP alimente la carte de la télécommande, qui n'a donc plus besoin de pile. L'ESP est lui‑même alimenté par un chargeur USB.
+- L'ESP alimente la carte de la télécommande par sa sortie 3 V, à la place de la pile. L'ESP est lui‑même alimenté par un chargeur USB.
 - L'ensemble tient dans un boîtier imprimé en 3D.
 
 ## Matériel
@@ -50,32 +51,52 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 |---|---|
 | VMC | Orcon MVS‑15RH (ventilation simple flux, 4 positions + mode auto avec détecteur d'humidité) |
 | Télécommande | Orcon 15RF, démontée, clavier retiré |
-| Microcontrôleur | ESP8266 (environnement PlatformIO `espmxdevkit`) |
-| Alimentation | Chargeur USB 5 V vers l'ESP, l'ESP alimente la carte de la télécommande |
+| Microcontrôleur | Carte de développement ESP8266 type NodeMCU v3 (ESP‑12), environnement PlatformIO `espmxdevkit` |
+| Liaison clavier | Nappe souple (FFC) et adaptateur FFC 8 broches au pas de 0,5 mm, à la place de la membrane du clavier |
+| Alimentation | Chargeur USB 5 V vers l'ESP, sortie 3 V de l'ESP vers la carte de la télécommande |
 | Boîtier | Imprimé en 3D |
 
 ## Câblage
 
-Chaque sortie de l'ESP est reliée à la piste d'un bouton du clavier de la télécommande. Au repos, les sorties sont à l'état haut. Un appui correspond à un état bas de 500 ms.
+Le clavier d'origine est une membrane souple avec une nappe qui s'enfiche sur un connecteur de la carte de la télécommande (voir les [photos](#photos-de-la-télécommande)). La membrane est retirée et remplacée par une nappe FFC reliée à l'ESP par un adaptateur, ce qui évite de souder sur la carte Orcon.
 
-| Bouton télécommande | Fonction | GPIO ESP8266 | Repère dans le code |
-|---|---|---|---|
-| Maison | Position défaut | GPIO12 | `PIN_DEFAULT` (contact 4) |
-| Auto | Mode automatique | GPIO5 | `PIN_AUTO` (contact 5) |
-| 1 | Position basse | GPIO2 | `PIN_LOW` (contact 1) |
-| 2 | Position moyenne | GPIO15 | `PIN_MEDIUM` (contact 2) |
-| 3 | Position élevée | GPIO4 | `PIN_HIGH` (contact 3) |
-| Timer (horloge) | Position élevée temporaire | GPIO14 | `PIN_MAX` (contact 6) |
-| LED d'activité | Allumée pendant l'envoi d'une commande | GPIO16 | `PIN_LED` |
+Chaque sortie de l'ESP est reliée à l'un des 6 contacts de boutons du connecteur clavier. Au repos, les sorties sont à l'état haut. Un appui correspond à un état bas de 500 ms.
 
-Les numéros de « contact » viennent des commentaires du code (`// 1` à `// 6`) et correspondent au repérage des contacts du clavier sur la carte de la télécommande.
+| Bouton télécommande | Fonction | Contact clavier | GPIO ESP8266 | Broche NodeMCU | Repère dans le code |
+|---|---|---|---|---|---|
+| 1 | Position basse | 1 | GPIO2 | D4 | `PIN_LOW` |
+| 2 | Position moyenne | 2 | GPIO15 | D8 | `PIN_MEDIUM` |
+| 3 | Position élevée | 3 | GPIO4 | D2 | `PIN_HIGH` |
+| Maison | Position défaut | 4 | GPIO12 | D6 | `PIN_DEFAULT` |
+| Auto | Mode automatique | 5 | GPIO5 | D1 | `PIN_AUTO` |
+| Timer (horloge) | Position élevée temporaire | 6 | GPIO14 | D5 | `PIN_MAX` |
+| LED d'activité | Allumée pendant l'envoi d'une commande | | GPIO16 | D0 (LED de la carte) | `PIN_LED` |
+
+Les numéros de contact correspondent aux commentaires `// 1` à `// 6` du code, et aux 6 contacts de boutons du connecteur clavier de la télécommande.
 
 Alimentation :
 
 - Chargeur USB 5 V vers l'entrée USB de l'ESP.
-- Sortie 3,3 V et GND de l'ESP vers l'emplacement de la pile de la télécommande.
+- Sortie 3 V et GND de l'ESP vers l'emplacement de la pile (CR2032) de la télécommande.
 
 > GPIO2 et GPIO15 servent aussi à choisir le mode de démarrage de l'ESP8266 (GPIO2 doit être à l'état haut et GPIO15 à l'état bas au démarrage). Si l'ESP refuse de démarrer après une modification du câblage, vérifiez en premier ces deux broches.
+
+## Photos de la télécommande
+
+Télécommande Orcon 15RF démontée, avant modification. Les photos sont dans [`docs/photos/`](docs/photos/).
+
+| | |
+|---|---|
+| ![Face avant](docs/photos/01-telecommande-face.jpg) | ![Ouverte, avec la pile](docs/photos/02-telecommande-ouverte-pile.jpg) |
+| Face avant : boutons Maison, Auto, Timer, 1, 2, 3 | Ouverte : pile CR2032 et étiquette (VMN‑15LF01) |
+| ![Clavier et cadre](docs/photos/03-clavier-et-cadre.jpg) | ![Carte dans son support](docs/photos/04-carte-dans-support.jpg) |
+| Clavier et cadre mural séparés | Carte électronique dans son support transparent |
+| ![Membrane du clavier](docs/photos/05-clavier-membrane.jpg) | ![Carte, face composants](docs/photos/06-carte-face-composants.jpg) |
+| Membrane du clavier : 6 contacts et sa nappe | Carte, face composants |
+| ![Connecteur clavier](docs/photos/07-carte-connecteur-clavier.jpg) | ![Microcontrôleur](docs/photos/08-carte-microcontroleur.jpg) |
+| Connecteur de la nappe clavier (à gauche) | Détail du microcontrôleur |
+| ![Dos de la carte](docs/photos/09-carte-dos.jpg) | ![Composants du montage](docs/photos/10-composants-esp-nappes.jpg) |
+| Dos de la carte, pastilles de contact | Composants du montage : cartes NodeMCU, nappes FFC, adaptateur FFC 8 broches |
 
 ## Logiciel
 
@@ -189,7 +210,7 @@ curl http://vmc/mode   # -> High
 
 ## Intégration Home Assistant
 
-L'API étant en HTTP simple, Home Assistant peut la piloter avec `rest_command` et lire le mode avec un capteur `rest`. Exemple de configuration (`configuration.yaml`) :
+Home Assistant pilote la VMC avec `rest_command`, et peut lire le mode avec un capteur `rest`. Exemple de configuration (`configuration.yaml`) :
 
 ```yaml
 rest_command:
@@ -237,4 +258,4 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 - Intégration Home Assistant native, par MQTT avec découverte automatique, à la place de la configuration REST manuelle.
 - Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
 - Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
-- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP), une photo du montage et un schéma de câblage.
+- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP), une photo du montage final et un schéma de câblage.
