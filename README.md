@@ -268,4 +268,4 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 - Intégration Home Assistant native, par MQTT avec découverte automatique, à la place de la configuration REST manuelle.
 - Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
 - Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
-- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP), et un schéma de câblage.
+- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP) et un schéma de câblage.
