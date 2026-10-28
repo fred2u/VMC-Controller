@@ -28,16 +28,25 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 
 ## Principe
 
-```
- Smartphone / Home Assistant
-            │  HTTP (Wi‑Fi local)
-            ▼
- ┌──────────────────────┐   GPIO (impulsions)  ┌─────────────────────────┐   RF    ┌────────────┐
- │ ESP8266              │ ───────────────────▶ │ Carte télécommande 15RF │ ──────▶ │ MVS‑15RH   │
- │ serveur web + LittleFS│   alimentation      │ (sans son clavier)      │         │ (VMC)      │
- └──────────────────────┘ ───────────────────▶ └─────────────────────────┘         └────────────┘
-            ▲
-            │ USB 5 V (chargeur)
+```mermaid
+flowchart LR
+    phone["📱 Smartphone<br/>navigateur web"]
+    ha["🏠 Home Assistant<br/>rest_command"]
+    usb["🔌 Chargeur USB 5 V"]
+
+    subgraph box["Boîtier imprimé en 3D"]
+        esp["ESP8266 NodeMCU<br/>serveur web + LittleFS"]
+        remote["Carte télécommande<br/>Orcon 15RF<br/>sans son clavier"]
+    end
+
+    vmc["🌀 VMC Orcon MVS-15RH"]
+
+    phone -- "HTTP, Wi-Fi local" --> esp
+    ha -- "HTTP, Wi-Fi local" --> esp
+    usb -- "5 V" --> esp
+    esp -- "6 GPIO via nappe FFC<br/>impulsions de 500 ms" --> remote
+    esp -. "3 V à la place de la pile" .-> remote
+    remote -- "radio RF" --> vmc
 ```
 
 - L'ESP8266 se connecte au Wi‑Fi de la maison et sert une petite page web.
@@ -190,6 +199,11 @@ pio device monitor
 Le moniteur série (115200 bauds) affiche la liste des fichiers LittleFS puis l'adresse IP obtenue. La page est ensuite accessible à l'adresse `http://vmc/` (si votre routeur résout les noms d'hôte) ou `http://<adresse-ip>/`. Il est conseillé de réserver une adresse IP fixe pour l'ESP dans le routeur, surtout pour Home Assistant.
 
 ## Utilisation
+
+| | |
+|---|---|
+| ![Interface sur smartphone, mode Medium](docs/screenshots/mobile-medium.png) | ![Interface sur smartphone, mode Max 30 min](docs/screenshots/mobile-max30.png) |
+| Au démarrage, l'ESP envoie Medium | Après un appui sur « Max 30 min » |
 
 La page affiche le mode courant (rafraîchi toutes les 2 secondes) et huit boutons :
 
