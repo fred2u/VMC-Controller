@@ -26,5 +26,7 @@ jobs:
           python-version: "3.12"
       - run: pip install platformio
       # include/wifi.h is gitignored (it holds the Wi-Fi password).
-      - run: printf '#pragma once\nconst char *ssid = "ci";\nconst char *password = "ci";\n' > include/wifi.h
+      - run: cp include/wifi.h.example include/wifi.h
       - run: pio run -e espmxdevkit
+      # Check that the data/ folder still packs into a LittleFS image.
+      - run: pio run -e espmxdevkit --target buildfs

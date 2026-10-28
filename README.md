@@ -23,9 +23,10 @@ The original RF remote (Orcon 15RF) was taken apart: its keypad was replaced by 
 11. [HTTP API](#http-api)
 12. [Home Assistant integration](#home-assistant-integration)
 13. [How the ventilation unit works](#how-the-ventilation-unit-works)
-14. [Known limitations](#known-limitations)
-15. [Ideas for improvement](#ideas-for-improvement)
-16. [License](#license)
+14. [Troubleshooting](#troubleshooting)
+15. [Known limitations](#known-limitations)
+16. [Ideas for improvement](#ideas-for-improvement)
+17. [License](#license)
 
 ---
 
@@ -164,7 +165,9 @@ Layout:
 ```
 ├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
 ├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
-├── include/wifi.h       Wi‑Fi credentials (not in Git, create it yourself)
+├── include/
+│   ├── wifi.h.example   Template for the Wi‑Fi credentials
+│   └── wifi.h           Your copy with the credentials (not in Git)
 └── data/                Files uploaded to LittleFS
     ├── index.html       Remote control page
     ├── script.js        Sends commands and refreshes the mode
@@ -187,7 +190,13 @@ How the firmware works (`src/main.cpp`):
 
 ### 2. Wi‑Fi credentials
 
-Create the file `include/wifi.h`, which is excluded from Git:
+Copy the template `include/wifi.h.example` to `include/wifi.h`, which is excluded from Git:
+
+```bash
+cp include/wifi.h.example include/wifi.h
+```
+
+Then put your network name and password in the copy:
 
 ```cpp
 #pragma once
@@ -316,6 +325,19 @@ Summary of the Orcon MVS‑15RH manual, useful to understand the commands:
 - **After a power cut**, the unit restarts in automatic mode.
 - **Pairing a remote**: unplug the unit for 5 seconds, plug it back in, then within 3 minutes press `1` and `Auto` on the remote at the same time until its LED blinks. With this build, pairing needs both outputs to be driven at the same time, which the firmware does not do today (see the ideas for improvement).
 - **Resetting the remote**: press Default and Timer together for 3 seconds.
+
+## Troubleshooting
+
+Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected over USB). At boot it lists the LittleFS files, then prints `Connection established` and the IP address. Each command received is printed too.
+
+| Symptom | What to check |
+|---|---|
+| The page at `http://vmc/` does not open | Try `http://<ip-address>/` with the address from the serial monitor: some routers do not resolve the `vmc` hostname. |
+| `Connection established` never shows | The Wi‑Fi network or password has changed (new Internet box, for example). Update `include/wifi.h`, then build and flash again. |
+| The page is blank or returns an error, but `/mode` answers | The LittleFS file list is empty in the serial monitor: upload the interface with `pio run --target uploadfs`. |
+| The ESP does not start after a wiring change | Check GPIO2 (must be HIGH at boot) and GPIO15 (must be LOW at boot), see [Wiring](#wiring). |
+| The ESP LED (GPIO16) lights up during a command, but the ventilation unit does not react | Check the FFC cable and breakout, and the 3 V power to the remote's battery holder. If the remote board is powered and connected, it may no longer be paired (after replacing or resetting the unit, for example): pair it again, see [How the ventilation unit works](#how-the-ventilation-unit-works). |
+| The mode shown does not match the ventilation unit | Expected: the ESP only knows the last mode it sent, see [Known limitations](#known-limitations). |
 
 ## Known limitations
 
