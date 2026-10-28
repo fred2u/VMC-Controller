@@ -24,6 +24,7 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 12. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
 13. [Limites connues](#limites-connues)
 14. [Pistes d'amélioration](#pistes-damélioration)
+15. [Licence](#licence)
 
 ---
 
