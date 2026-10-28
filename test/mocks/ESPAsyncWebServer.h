@@ -36,21 +36,31 @@ public:
 
 typedef void (*ArRequestHandlerFunction)(AsyncWebServerRequest *request);
 
+enum WebRequestMethod { HTTP_GET = 1, HTTP_POST = 2, HTTP_ANY = 0xFF };
+
+struct FakeRoute
+{
+  int method;
+  ArRequestHandlerFunction handler;
+};
+
 class AsyncWebServer
 {
 public:
   explicit AsyncWebServer(int p) : port(p) {}
-  void on(const char *uri, ArRequestHandlerFunction f) { routes[uri] = f; }
+  void on(const char *uri, ArRequestHandlerFunction f) { routes[uri] = {HTTP_ANY, f}; }
+  void on(const char *uri, int method, ArRequestHandlerFunction f) { routes[uri] = {method, f}; }
   void onNotFound(ArRequestHandlerFunction f) { notFound = f; }
   void begin() { started = true; }
 
-  // Test helper: route a GET request like the real server would.
-  AsyncWebServerRequest request(const char *uri)
+  // Test helper: route a request like the real server would. A route
+  // registered for another method falls through to the not-found handler.
+  AsyncWebServerRequest request(const char *uri, int method = HTTP_GET)
   {
     AsyncWebServerRequest req{String(uri)};
     auto it = routes.find(uri);
-    if (it != routes.end())
-      it->second(&req);
+    if (it != routes.end() && (it->second.method & method))
+      it->second.handler(&req);
     else if (notFound)
       notFound(&req);
     return req;
@@ -58,6 +68,6 @@ public:
 
   int port;
   bool started = false;
-  std::map<std::string, ArRequestHandlerFunction> routes;
+  std::map<std::string, FakeRoute> routes;
   ArRequestHandlerFunction notFound = nullptr;
 };

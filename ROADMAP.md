@@ -15,7 +15,7 @@ Items are grouped by topic. The priority shows how much it matters to someone re
 
 ## 1. Remote features
 
-### 🔴 Remote pairing mode
+### ✅ Remote pairing mode
 
 **Today**: to pair the remote with the ventilation unit (after replacing the unit or after a reset, for example), `1` and `Auto` must be pressed **at the same time**. The firmware only sends one press at a time, so the enclosure has to be opened and the contacts bridged by hand.
 
@@ -25,6 +25,8 @@ Items are grouped by topic. The priority shows how much it matters to someone re
 - Show the procedure on the ventilation unit side in the interface: unplug the unit for 5 seconds, plug it back in, then start pairing within 3 minutes.
 - In the same way, add the **remote reset** (`Default` and `Timer` pressed together for 3 seconds).
 - Make `sendCommand` able to press several buttons at once and to hold the press longer, which both features need.
+
+✅ Done: the **Maintenance** page (`/maintenance`) has **Pair** (`POST /pair`, `1` and `Auto` held for 5 s) with the procedure, and **Reset the remote** (`POST /reset-remote`, `Default` and `Timer` held for 4 s). Each command in the firmware table can press two buttons and has its own hold time. The 5 s for pairing is a first guess: adjust `pair_delay` in `src/main.cpp` if the LED does not blink.
 
 ### ✅ Feedback on the Max modes
 
@@ -79,7 +81,7 @@ GPIO2 and GPIO15 are also used to select the ESP8266 boot mode. If the remote's 
 
 Still to do:
 
-- Erase the saved network with the factory reset button (see "Factory reset" above) or from a maintenance page.
+- Erase the saved network with the factory reset button (see "Factory reset" above). ✅ From the maintenance page: **Forget Wi‑Fi**.
 - Optionally protect the `VMC-Setup` access point with a password.
 
 ### ✅ Updates over Wi‑Fi (OTA)
@@ -118,7 +120,7 @@ There is no authentication. That is acceptable on a trusted local network, but t
 - ✅ Fix the `<meta>` tag in `index.html`, where `charset` was stuck to the `viewport` attribute and therefore ignored.
 - ✅ Redesign the page for smartphones without a CSS framework (Milligram removed): light and dark themes, buttons grouped by Speed, Program and Max, Online/Offline badge when the ESP stops answering.
 - ✅ Show the system information at the bottom of the page: version, IP address, network name and Wi‑Fi signal, from the new `/info` route (JSON).
-- 🟢 Add a "Maintenance" page: pairing, reset, uptime and more system details.
+- ✅ Add a "Maintenance" page: pairing, remote reset, uptime, last restart reason, free memory, Wi‑Fi network, restart and Forget Wi‑Fi.
 
 ---
 

@@ -190,13 +190,15 @@ Layout:
 └── data/                Files uploaded to LittleFS
     ├── index.html       Remote control page
     ├── script.js        Sends commands, refreshes the mode, shows the board details
-    └── style.css        Layout and light/dark themes
+    ├── maintenance.html Maintenance page: pairing, remote reset, restart, Wi‑Fi
+    ├── maintenance.js   Sends the maintenance actions, shows the ESP details
+    └── style.css        Layout and light/dark themes (both pages)
 ```
 
 How the firmware works (`src/main.cpp`):
 
 - `setup()` sets up the GPIOs, connects the ESP to Wi‑Fi with the hostname `vmc` (or opens the `VMC-Setup` portal, see [Connect to Wi‑Fi](#5-connect-to-wifi)) and starts the web server. At boot, it sends the **Medium** command, which puts the ventilation unit in a known state.
-- HTTP requests only record the requested command. `loop()` runs it, so the server is not blocked during the delays.
+- HTTP requests only record the requested command. `loop()` presses and releases the buttons step by step with `millis()`, without `delay()`, so the server keeps answering while a command is sent.
 - The current mode is remembered by the ESP. It is not read from the ventilation unit, which sends nothing back.
 
 ## Installation
@@ -307,6 +309,7 @@ The tests are built by the computer's own C++ compiler, not the ESP one. Linux a
 - that `loop()` never calls `delay()`, so the web server keeps answering while a command is sent, and that a command received meanwhile is sent after it (only the last one if several arrive);
 - that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up, also when `millis()` wraps around after 49 days;
 - that Max commands are refused with `409` in High mode;
+- that `/pair` holds `1` and `Auto` together for 5 s and `/reset-remote` holds `Default` and `Timer` for 4 s, without changing the mode, that they and `/restart` and `/forget-wifi` only answer `POST`, that a restart waits for the answer and never cuts a press short, and that the uptime survives the `millis()` wraparound;
 - that pages are served from LittleFS, that `/version` answers the built-in version, that `/info` answers the version, name, IP address and Wi‑Fi signal as JSON, and that an unknown URL answers `404`;
 - that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
@@ -387,7 +390,16 @@ The page follows the phone's light or dark theme. It shows:
 - the last mode sent, refreshed every 2 seconds, with the matching button highlighted and a fan that turns faster with the speed;
 - an **Online** / **Offline** badge: after two refreshes without an answer (3 s each), the page says **Offline** and greys out the buttons, then comes back on its own;
 - the eight buttons below, grouped by Speed, Program and Max. The Max buttons are greyed out while in High, since the firmware ignores them there;
-- at the bottom, the firmware version, the IP address, the network name and the Wi‑Fi signal of the ESP (from `/info`).
+- at the bottom, the firmware version, the IP address, the network name and the Wi‑Fi signal of the ESP (from `/info`), and a link to the **Maintenance** page.
+
+The **Maintenance** page (`http://vmc/maintenance`) gathers what is rarely needed:
+
+- **Pair the remote** with the ventilation unit, with the procedure: unplug the unit for 5 seconds, plug it back in, then tap **Pair** within 3 minutes. The ESP holds `1` and `Auto` together for 5 seconds; the remote's LED blinks once it is paired.
+- **Reset the remote** to its factory settings: the ESP holds `Default` and `Timer` together for 4 seconds.
+- The ESP details: firmware, time since the last start and its reason, free memory, Wi‑Fi network and signal, IP address and name.
+- **Restart** the ESP, and **Forget Wi‑Fi**: the ESP erases the saved network and restarts in setup mode (`VMC-Setup` access point, see [Connect to Wi‑Fi](#5-connect-to-wifi)), for example after changing the Internet box.
+
+Each action asks for confirmation, except pairing.
 
 | Button | Effect on the ventilation unit |
 |---|---|
@@ -404,7 +416,7 @@ The "Max" modes match the remote's Timer button, pressed 1, 2 or 3 times. They a
 
 ## HTTP API
 
-All routes are `GET`, on port 80.
+The routes are on port 80. The mode buttons and the information routes answer `GET` (as `rest_command` sends by default). The maintenance actions only answer `POST`, so that opening their link by mistake does nothing (`GET` answers `404`).
 
 | Route | Response | Purpose |
 |---|---|---|
@@ -418,8 +430,13 @@ All routes are `GET`, on port 80.
 | `/max2` | `200`, `text/plain`: `Max 30 min` | High position for 30 min |
 | `/max3` | `200`, `text/plain`: `Max 60 min` | High position for 60 min |
 | `/mode` | `text/plain` | Current mode: `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` or `Max 60 min` |
+| `/pair` | `POST`, `200`, `text/plain`: `Pairing` | Holds `1` and `Auto` together for 5 s, to pair the remote |
+| `/reset-remote` | `POST`, `200`, `text/plain`: `Remote reset` | Holds `Default` and `Timer` together for 4 s, to reset the remote |
+| `/restart` | `POST`, `200` | Restarts the ESP about a second later |
+| `/forget-wifi` | `POST`, `200` | Erases the saved Wi‑Fi network, then restarts in setup mode (`VMC-Setup`) |
+| `/maintenance` | HTML page | Maintenance page |
 | `/version` | `text/plain` | Firmware version, for example `v1.1` (see [Releases](#releases)) |
-| `/info` | `application/json` | Board details: `{"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak) |
+| `/info` | `application/json` | Board details: `{"version":"v1.2","hostname":"vmc","ip":"192.168.1.42","rssi":-61,"ssid":"home","uptime":3600,"heap":31000,"reset":"Power On"}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak; `uptime` is in seconds since the last start, `heap` the free memory in bytes, `reset` the reason of the last start) |
 
 A command answers right away with the mode it sets, and the ESP presses the button just after. A Max command in High mode answers `409` with `Max is ignored in High mode` and presses nothing. A command received while another one is being sent (up to about 3 seconds for Max 60 min) waits for it to finish; if several arrive meanwhile, only the last one is sent. Example:
 
@@ -428,7 +445,8 @@ curl http://vmc/high      # -> High
 curl http://vmc/max1      # -> Max is ignored in High mode (409)
 curl http://vmc/mode      # -> High
 curl http://vmc/version   # -> v1.1
-curl http://vmc/info      # -> {"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}
+curl http://vmc/info      # -> {"version":"v1.2","hostname":"vmc",...,"uptime":3600,...}
+curl -X POST http://vmc/pair   # -> Pairing
 ```
 
 ## Home Assistant integration
@@ -463,8 +481,8 @@ Summary of the Orcon MVS‑15RH manual, useful to understand the commands:
 - **Auto mode**: the unit measures humidity continuously. If it rises by more than 5 to 10 % in 3 minutes, the unit switches to position 2 or 3, then goes back to auto after 15 or 30 minutes depending on DIP switch 8.
 - **Timer**: 1, 2 or 3 presses give the high position for 15, 30 or 60 minutes, then the unit goes back to the last position chosen. Pressing another button stops the timer.
 - **After a power cut**, the unit restarts in automatic mode.
-- **Pairing a remote**: unplug the unit for 5 seconds, plug it back in, then within 3 minutes press `1` and `Auto` on the remote at the same time until its LED blinks. With this build, pairing needs both outputs to be driven at the same time, which the firmware does not do today (see the ideas for improvement).
-- **Resetting the remote**: press Default and Timer together for 3 seconds.
+- **Pairing a remote**: unplug the unit for 5 seconds, plug it back in, then within 3 minutes press `1` and `Auto` on the remote at the same time until its LED blinks. With this build, use **Pair** on the Maintenance page, which holds both buttons for 5 seconds.
+- **Resetting the remote**: press Default and Timer together for 3 seconds (**Reset the remote** on the Maintenance page).
 
 ## Troubleshooting
 
@@ -487,7 +505,7 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 - **Estimated mode**: the mode shown is the one from the last command sent by the ESP. A command sent by another remote, a return to auto mode after a power cut, or a timer ending on the unit side are not seen by the ESP.
 - **Max mode duration**: the ESP counts the Max duration from the moment it sends the command, with `millis()`. The unit has its own timer, so the two can drift by a few seconds.
 - **Updates over Wi‑Fi**: protected by a password, but sent unencrypted over the local network.
-- **Setup portal**: the `VMC-Setup` access point has no password. It only opens when the ESP cannot reach its network, for 3 minutes after a boot. There is no button yet to reopen it or to forget the network (see the factory reset idea in the [roadmap](ROADMAP.md)).
+- **Setup portal**: the `VMC-Setup` access point has no password. It only opens when the ESP cannot reach its network, for 3 minutes after a boot. To choose another network, use **Forget Wi‑Fi** on the Maintenance page. If the ESP can no longer be reached at all, a hardware button is still missing (see the factory reset idea in the [roadmap](ROADMAP.md)).
 
 ## Ideas for improvement
 

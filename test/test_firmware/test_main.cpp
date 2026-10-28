@@ -12,6 +12,7 @@
 
 // ----- fake hardware state -------------------------------------------------
 FakeSerial Serial;
+FakeESP ESP;
 FakeWiFi WiFi;
 FakeLittleFS LittleFS;
 FakeArduinoOTA ArduinoOTA;
@@ -76,6 +77,11 @@ static void boot(const char *savedSsid = "", bool wifiConnects = true)
   sendStep = SEND_IDLE;
   sending = no_command;
   pressesLeft = 0;
+  uptime = 0;
+  uptimeLastMillis = 0;
+  restartRequest = RESTART_NONE;
+  restartRequestedAt = 0;
+  ESP = FakeESP();
   otaStarted = false;
   ArduinoOTA.reset();
   WiFi = FakeWiFi();
@@ -131,6 +137,15 @@ static int pressCount(int pin)
     if (e.kind == HwEvent::WRITE && e.pin == pin && e.value == LOW)
       n++;
   return n;
+}
+
+// When the button on `pin` went down and up, for the first press.
+static unsigned long pressedAt(int pin, int value)
+{
+  for (const HwEvent &e : fake::events)
+    if (e.kind == HwEvent::WRITE && e.pin == pin && e.value == value)
+      return e.atMillis;
+  return 0;
 }
 
 static int pressCountOnButtons()
@@ -513,12 +528,15 @@ void test_info_answers_version_hostname_ip_and_signal_as_json()
 {
   WiFi.ipValue = IPAddress("192.168.1.42");
   WiFi.rssiValue = -61;
+  WiFi.savedSsid = "home-network";
+  uptime = 3600; // ms since boot
   AsyncWebServerRequest r = webServer.request("/info");
   TEST_ASSERT_EQUAL(200, r.status);
   TEST_ASSERT_EQUAL_STRING("application/json", r.contentType.c_str());
   TEST_ASSERT_EQUAL_STRING(
       "{\"version\":\"v9.9-test\",\"hostname\":\"vmc\","
-      "\"ip\":\"192.168.1.42\",\"rssi\":-61}",
+      "\"ip\":\"192.168.1.42\",\"rssi\":-61,\"ssid\":\"home-network\","
+      "\"uptime\":3,\"heap\":31000,\"reset\":\"Power On\"}",
       r.content.c_str());
   TEST_ASSERT_EQUAL(0, pressCountOnButtons());
 }
@@ -528,6 +546,120 @@ void test_unknown_url_answers_404_and_presses_nothing()
   TEST_ASSERT_EQUAL(404, webServer.request("/turbo").status);
   runFor(2000);
   TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+}
+
+// ----- remote maintenance and maintenance page ---------------------------
+
+void test_pair_holds_1_and_auto_together_for_5_s()
+{
+  AsyncWebServerRequest r = webServer.request("/pair", HTTP_POST);
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("Pairing", r.content.c_str());
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_LOW));
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_AUTO));
+  TEST_ASSERT_EQUAL(2, pressCountOnButtons());
+  TEST_ASSERT_EQUAL(pressedAt(PIN_LOW, LOW), pressedAt(PIN_AUTO, LOW));
+  TEST_ASSERT_EQUAL(5000, (long)(pressedAt(PIN_LOW, HIGH) - pressedAt(PIN_LOW, LOW)));
+  TEST_ASSERT_EQUAL(5000, (long)(pressedAt(PIN_AUTO, HIGH) - pressedAt(PIN_AUTO, LOW)));
+}
+
+void test_reset_remote_holds_default_and_timer_together_for_4_s()
+{
+  AsyncWebServerRequest r = webServer.request("/reset-remote", HTTP_POST);
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("Remote reset", r.content.c_str());
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_DEFAULT));
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_MAX));
+  TEST_ASSERT_EQUAL(2, pressCountOnButtons());
+  TEST_ASSERT_EQUAL(4000, (long)(pressedAt(PIN_MAX, HIGH) - pressedAt(PIN_DEFAULT, LOW)));
+}
+
+void test_pairing_and_remote_reset_keep_the_mode()
+{
+  sendAndRun("/low");
+  webServer.request("/pair", HTTP_POST);
+  runUntilIdle();
+  TEST_ASSERT_EQUAL_STRING("Low", modeText().c_str());
+  sendAndRun("/max1");
+  webServer.request("/reset-remote", HTTP_POST);
+  runUntilIdle();
+  TEST_ASSERT_EQUAL_STRING("Max 15 min", modeText().c_str());
+}
+
+void test_maintenance_actions_need_post()
+{
+  const char *urls[] = {"/pair", "/reset-remote", "/restart", "/forget-wifi"};
+  for (const char *url : urls)
+    TEST_ASSERT_EQUAL_MESSAGE(404, webServer.request(url).status, url);
+  runFor(5000);
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+  TEST_ASSERT_EQUAL(0, ESP.restartCount);
+}
+
+void test_mode_buttons_still_answer_get_for_home_assistant()
+{
+  TEST_ASSERT_EQUAL(200, webServer.request("/low").status);
+  TEST_ASSERT_EQUAL(200, webServer.request("/max1").status);
+}
+
+void test_restart_waits_for_the_answer_then_restarts_once()
+{
+  AsyncWebServerRequest r = webServer.request("/restart", HTTP_POST);
+  TEST_ASSERT_EQUAL(200, r.status);
+  runFor(900);
+  TEST_ASSERT_EQUAL(0, ESP.restartCount);
+  runFor(200);
+  TEST_ASSERT_EQUAL(1, ESP.restartCount);
+  TEST_ASSERT_EQUAL(0, WiFi.disconnectCount);
+  runFor(2000);
+  TEST_ASSERT_EQUAL(1, ESP.restartCount);
+}
+
+void test_restart_does_not_cut_a_press_short()
+{
+  webServer.request("/pair", HTTP_POST);
+  runFor(10);
+  webServer.request("/restart", HTTP_POST);
+  runFor(4000);
+  TEST_ASSERT_EQUAL(0, ESP.restartCount);
+  runUntilIdle();
+  runFor(1100);
+  TEST_ASSERT_EQUAL(1, ESP.restartCount);
+  TEST_ASSERT_EQUAL(HIGH, fake::pinLevels[PIN_LOW]);
+  TEST_ASSERT_EQUAL(HIGH, fake::pinLevels[PIN_AUTO]);
+}
+
+void test_forget_wifi_erases_the_network_then_restarts()
+{
+  WiFi.savedSsid = "home-network";
+  TEST_ASSERT_EQUAL(200, webServer.request("/forget-wifi", HTTP_POST).status);
+  TEST_ASSERT_EQUAL_STRING("home-network", WiFi.savedSsid.c_str());
+  runFor(1100);
+  TEST_ASSERT_EQUAL(1, WiFi.disconnectCount);
+  TEST_ASSERT_EQUAL_STRING("", WiFi.savedSsid.c_str());
+  TEST_ASSERT_EQUAL(1, ESP.restartCount);
+}
+
+void test_uptime_keeps_counting_after_the_millis_wraparound()
+{
+  fake::nowMillis = 0xFFFFFFFFUL - 1000;
+  uptimeLastMillis = (uint32_t)fake::nowMillis;
+  uptime = 50ULL * 24 * 3600 * 1000; // 50 days
+  runFor(3001); // last loop() 3000 ms later, 2000 ms after the wraparound
+  TEST_ASSERT_EQUAL(50L * 24 * 3600 * 1000 + 3000, (long)uptime);
+}
+
+void test_maintenance_page_is_served_from_littlefs()
+{
+  AsyncWebServerRequest r = webServer.request("/maintenance");
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL_STRING("/maintenance.html", r.servedFile.c_str());
+  TEST_ASSERT_EQUAL_STRING("text/html", r.contentType.c_str());
+  r = webServer.request("/maintenance.js");
+  TEST_ASSERT_EQUAL_STRING("/maintenance.js", r.servedFile.c_str());
+  TEST_ASSERT_EQUAL_STRING("text/javascript", r.contentType.c_str());
 }
 
 // ----- updates over Wi-Fi (OTA) -------------------------------------------
@@ -617,6 +749,16 @@ int main(int, char **)
   RUN_TEST(test_version_answers_the_built_in_version_as_plain_text);
   RUN_TEST(test_info_answers_version_hostname_ip_and_signal_as_json);
   RUN_TEST(test_unknown_url_answers_404_and_presses_nothing);
+  RUN_TEST(test_pair_holds_1_and_auto_together_for_5_s);
+  RUN_TEST(test_reset_remote_holds_default_and_timer_together_for_4_s);
+  RUN_TEST(test_pairing_and_remote_reset_keep_the_mode);
+  RUN_TEST(test_maintenance_actions_need_post);
+  RUN_TEST(test_mode_buttons_still_answer_get_for_home_assistant);
+  RUN_TEST(test_restart_waits_for_the_answer_then_restarts_once);
+  RUN_TEST(test_restart_does_not_cut_a_press_short);
+  RUN_TEST(test_forget_wifi_erases_the_network_then_restarts);
+  RUN_TEST(test_uptime_keeps_counting_after_the_millis_wraparound);
+  RUN_TEST(test_maintenance_page_is_served_from_littlefs);
   RUN_TEST(test_ota_waits_for_the_wifi_connection);
   RUN_TEST(test_ota_starts_once_with_hostname_and_password_when_wifi_is_up);
   RUN_TEST(test_ota_is_handled_on_every_loop_even_without_a_command);

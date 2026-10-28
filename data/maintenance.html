@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>VMC Controller · Maintenance</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script type="text/javascript" src="maintenance.js"></script>
+</head>
+<body>
+    <header class="top">
+        <h1><a href="/" class="back" aria-label="Back to the remote">‹</a> Maintenance</h1>
+        <span id="link" class="link">Connecting…</span>
+    </header>
+
+    <main>
+        <section class="group">
+            <h2>Pair the remote</h2>
+            <div class="card panel">
+                <p>Needed after replacing the ventilation unit or resetting the remote.</p>
+                <ol>
+                    <li>Unplug the ventilation unit for 5 seconds, then plug it back in.</li>
+                    <li>Within 3 minutes, tap <b>Pair</b>: the ESP holds <b>1</b> and <b>Auto</b> together for 5 seconds.</li>
+                    <li>The remote's LED blinks when it is paired. If not, start again from step 1.</li>
+                </ol>
+                <button data-post="pair">Pair</button>
+            </div>
+        </section>
+
+        <section class="group">
+            <h2>Reset the remote</h2>
+            <div class="card panel">
+                <p>Holds <b>Default</b> and <b>Timer</b> together for 4 seconds, which puts the remote back to its factory settings. It may then have to be paired again.</p>
+                <button data-post="reset-remote" data-confirm="Reset the remote to its factory settings? It may have to be paired again.">Reset the remote</button>
+            </div>
+        </section>
+
+        <section class="group">
+            <h2>ESP</h2>
+            <div class="card panel">
+                <dl class="facts">
+                    <div><dt>Firmware</dt><dd id="version">…</dd></div>
+                    <div><dt>Running for</dt><dd id="uptime">…</dd></div>
+                    <div><dt>Last start</dt><dd id="reset">…</dd></div>
+                    <div><dt>Free memory</dt><dd id="heap">…</dd></div>
+                    <div><dt>Wi-Fi network</dt><dd id="ssid">…</dd></div>
+                    <div><dt>Wi-Fi signal</dt><dd id="rssi">…</dd></div>
+                    <div><dt>IP address</dt><dd id="ip">…</dd></div>
+                    <div><dt>Name</dt><dd id="hostname">…</dd></div>
+                </dl>
+                <div class="grid two">
+                    <button data-post="restart" data-confirm="Restart the ESP? It sends Medium when it starts.">Restart</button>
+                    <button class="danger" data-post="forget-wifi" data-confirm="Forget the Wi-Fi network? The ESP restarts and opens the VMC-Setup access point to choose a network again.">Forget Wi-Fi</button>
+                </div>
+                <p class="hint">After "Forget Wi-Fi", connect to the <b>VMC-Setup</b> network with a phone to choose the new network.</p>
+            </div>
+        </section>
+
+        <p id="notice" class="notice" role="status"></p>
+    </main>
+</body>
+</html>
