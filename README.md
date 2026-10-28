@@ -1,290 +1,290 @@
 # VMC Controller
 
-Télécommande Wi‑Fi pour une VMC **Orcon MVS‑15RH**, basée sur un ESP8266.
+Wi‑Fi remote control for an **Orcon MVS‑15RH** ventilation unit (MVHR/extract fan, "VMC" in French), based on an ESP8266.
 
-La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a été remplacé par un ESP8266 qui « appuie » sur les boutons à sa place. La VMC se pilote ainsi depuis un smartphone (page web sur le réseau local) et depuis Home Assistant, sans toucher à la VMC elle‑même ni au protocole radio.
+The original RF remote (Orcon 15RF) was taken apart: its keypad was replaced by an ESP8266 that "presses" the buttons instead. The ventilation unit can then be controlled from a smartphone (web page on the local network) and from Home Assistant, without touching the unit itself or the radio protocol.
 
-> Projet personnel, prévu pour un réseau local privé. L'interface n'a **aucune authentification** : ne l'exposez pas sur Internet.
+> Personal project, meant for a private local network. The interface has **no authentication**: do not expose it to the Internet.
 
 ---
 
-## Sommaire
+## Contents
 
-1. [Principe](#principe)
-2. [Matériel](#matériel)
-3. [Câblage](#câblage)
-4. [Photos de la télécommande](#photos-de-la-télécommande)
-5. [Montage final](#montage-final)
-6. [Circuit imprimé](#circuit-imprimé)
-7. [Logiciel](#logiciel)
+1. [How it works](#how-it-works)
+2. [Hardware](#hardware)
+3. [Wiring](#wiring)
+4. [Photos of the remote](#photos-of-the-remote)
+5. [Final assembly](#final-assembly)
+6. [Printed circuit board](#printed-circuit-board)
+7. [Software](#software)
 8. [Installation](#installation)
 9. [Tests](#tests)
-10. [Utilisation](#utilisation)
-11. [API HTTP](#api-http)
-12. [Intégration Home Assistant](#intégration-home-assistant)
-13. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
-14. [Limites connues](#limites-connues)
-15. [Pistes d'amélioration](#pistes-damélioration)
-16. [Licence](#licence)
+10. [Usage](#usage)
+11. [HTTP API](#http-api)
+12. [Home Assistant integration](#home-assistant-integration)
+13. [How the ventilation unit works](#how-the-ventilation-unit-works)
+14. [Known limitations](#known-limitations)
+15. [Ideas for improvement](#ideas-for-improvement)
+16. [License](#license)
 
 ---
 
-## Principe
+## How it works
 
 ```mermaid
 flowchart LR
-    phone["📱 Smartphone<br/>navigateur web"]
+    phone["📱 Smartphone<br/>web browser"]
     ha["🏠 Home Assistant<br/>rest_command"]
-    usb["🔌 Chargeur USB 5 V"]
+    usb["🔌 5 V USB charger"]
 
-    subgraph box["Boîtier imprimé en 3D"]
-        esp["ESP-Mx DevKit (ESP8285)<br/>serveur web + LittleFS"]
-        remote["Carte télécommande<br/>Orcon 15RF<br/>sans son clavier"]
+    subgraph box["3D-printed enclosure"]
+        esp["ESP-Mx DevKit (ESP8285)<br/>web server + LittleFS"]
+        remote["Orcon 15RF<br/>remote board<br/>without its keypad"]
     end
 
-    vmc["🌀 VMC Orcon MVS-15RH"]
+    vmc["🌀 Orcon MVS-15RH ventilation unit"]
 
-    phone -- "HTTP, Wi-Fi local" --> esp
-    ha -- "HTTP, Wi-Fi local" --> esp
+    phone -- "HTTP, local Wi-Fi" --> esp
+    ha -- "HTTP, local Wi-Fi" --> esp
     usb -- "5 V" --> esp
-    esp -- "6 GPIO via nappe FFC<br/>impulsions de 500 ms" --> remote
-    esp -. "3 V à la place de la pile" .-> remote
-    remote -- "radio RF" --> vmc
+    esp -- "6 GPIOs over FFC cable<br/>500 ms pulses" --> remote
+    esp -. "3 V instead of the battery" .-> remote
+    remote -- "RF radio" --> vmc
 ```
 
-- L'ESP8266 se connecte au Wi‑Fi de la maison et sert une petite page web.
-- Chaque bouton de la page correspond à un bouton de la télécommande. L'ESP met la sortie correspondante à l'état bas pendant 500 ms, ce qui simule un appui.
-- La carte de la télécommande émet ensuite la commande radio vers la VMC, comme si on avait appuyé sur le bouton.
-- L'ESP alimente la carte de la télécommande par sa sortie 3 V, à la place de la pile. L'ESP est lui‑même alimenté par un chargeur USB.
-- L'ensemble tient dans un boîtier imprimé en 3D.
+- The ESP8266 connects to the home Wi‑Fi and serves a small web page.
+- Each button on the page matches a button on the remote. The ESP pulls the matching output LOW for 500 ms, which simulates a press.
+- The remote board then sends the radio command to the ventilation unit, as if the button had been pressed.
+- The ESP powers the remote board from its 3 V output, instead of the battery. The ESP itself is powered by a USB charger.
+- Everything fits in a 3D-printed enclosure.
 
-## Matériel
+## Hardware
 
-| Élément | Détail |
+| Item | Details |
 |---|---|
-| VMC | Orcon MVS‑15RH (ventilation simple flux, 4 positions + mode auto avec détecteur d'humidité) |
-| Télécommande | Orcon 15RF, démontée, clavier retiré |
-| Microcontrôleur | Carte de développement DOIT ESP‑Mx DevKit (ESP8285, variante de l'ESP8266 avec mémoire flash intégrée), environnement PlatformIO `espmxdevkit` |
-| Circuit imprimé | PCB maison de 50 × 50 mm qui relie l'ESP à l'adaptateur FFC (voir [Circuit imprimé](#circuit-imprimé)) |
-| Liaison clavier | Nappe souple (FFC) et adaptateur FFC 8 broches au pas de 0,5 mm, à la place de la membrane du clavier |
-| Alimentation | Chargeur USB 5 V vers l'ESP, sortie 3 V de l'ESP vers la carte de la télécommande |
-| Boîtier | Imprimé en 3D |
+| Ventilation unit | Orcon MVS‑15RH (single-flow extract ventilation, 4 positions + auto mode with humidity sensor) |
+| Remote | Orcon 15RF, taken apart, keypad removed |
+| Microcontroller | DOIT ESP‑Mx DevKit development board (ESP8285, an ESP8266 variant with built-in flash memory), PlatformIO environment `espmxdevkit` |
+| Printed circuit board | Home-made 50 × 50 mm PCB that connects the ESP to the FFC breakout (see [Printed circuit board](#printed-circuit-board)) |
+| Keypad link | Flexible flat cable (FFC) and 8-pin 0.5 mm pitch FFC breakout, instead of the keypad membrane |
+| Power | 5 V USB charger to the ESP, ESP 3 V output to the remote board |
+| Enclosure | 3D-printed |
 
-## Câblage
+## Wiring
 
-Le clavier d'origine est une membrane souple avec une nappe qui s'enfiche sur un connecteur de la carte de la télécommande (voir les [photos](#photos-de-la-télécommande) et le [montage final](#montage-final)). La membrane est retirée et remplacée par une nappe FFC reliée à l'ESP par un adaptateur, ce qui évite de souder sur la carte Orcon.
+The original keypad is a flexible membrane with a ribbon that plugs into a connector on the remote board (see the [photos](#photos-of-the-remote) and the [final assembly](#final-assembly)). The membrane is removed and replaced by an FFC cable connected to the ESP through a breakout, which avoids soldering on the Orcon board.
 
-Chaque sortie de l'ESP est reliée à l'un des 6 contacts de boutons du connecteur clavier. Au repos, les sorties sont à l'état haut. Un appui correspond à un état bas de 500 ms.
+Each ESP output is connected to one of the 6 button contacts of the keypad connector. At rest, the outputs are HIGH. A press is a 500 ms LOW state.
 
-| Bouton télécommande | Fonction | Contact clavier | GPIO ESP8266 | Repère dans le code |
+| Remote button | Function | Keypad contact | ESP8266 GPIO | Name in the code |
 |---|---|---|---|---|
-| 1 | Position basse | 1 | GPIO2 | `PIN_LOW` |
-| 2 | Position moyenne | 2 | GPIO15 | `PIN_MEDIUM` |
-| 3 | Position élevée | 3 | GPIO4 | `PIN_HIGH` |
-| Maison | Position défaut | 4 | GPIO12 | `PIN_DEFAULT` |
-| Auto | Mode automatique | 5 | GPIO5 | `PIN_AUTO` |
-| Timer (horloge) | Position élevée temporaire | 6 | GPIO14 | `PIN_MAX` |
-| LED d'activité | Allumée pendant l'envoi d'une commande | | GPIO16 | `PIN_LED` |
+| 1 | Low position | 1 | GPIO2 | `PIN_LOW` |
+| 2 | Medium position | 2 | GPIO15 | `PIN_MEDIUM` |
+| 3 | High position | 3 | GPIO4 | `PIN_HIGH` |
+| House | Default position | 4 | GPIO12 | `PIN_DEFAULT` |
+| Auto | Automatic mode | 5 | GPIO5 | `PIN_AUTO` |
+| Timer (clock) | Temporary high position | 6 | GPIO14 | `PIN_MAX` |
+| Activity LED | On while a command is being sent | | GPIO16 | `PIN_LED` |
 
-Les numéros de contact correspondent aux commentaires `// 1` à `// 6` du code, et aux 6 contacts de boutons du connecteur clavier de la télécommande. Sur l'ESP‑Mx DevKit et sur le PCB, les broches sont repérées directement par leur numéro de GPIO (par exemple `D15` ou `15` pour GPIO15).
+The contact numbers match the `// 1` to `// 6` comments in the code, and the 6 button contacts of the remote's keypad connector. On the ESP‑Mx DevKit and on the PCB, pins are labelled directly with their GPIO number (for example `D15` or `15` for GPIO15).
 
-Alimentation :
+Power:
 
-- Chargeur USB 5 V vers l'entrée USB de l'ESP.
-- Sortie 3 V et GND de l'ESP vers l'emplacement de la pile (CR2032) de la télécommande.
+- 5 V USB charger to the ESP's USB input.
+- ESP 3 V output and GND to the remote's battery holder (CR2032).
 
-> GPIO2 et GPIO15 servent aussi à choisir le mode de démarrage de l'ESP8266 (GPIO2 doit être à l'état haut et GPIO15 à l'état bas au démarrage). Si l'ESP refuse de démarrer après une modification du câblage, vérifiez en premier ces deux broches.
+> GPIO2 and GPIO15 are also used to select the ESP8266 boot mode (GPIO2 must be HIGH and GPIO15 LOW at boot). If the ESP refuses to boot after a wiring change, check these two pins first.
 
-## Photos de la télécommande
+## Photos of the remote
 
-Télécommande Orcon 15RF démontée, avant modification. Les photos sont dans [`docs/photos/`](docs/photos/).
-
-| | |
-|---|---|
-| ![Face avant](docs/photos/01-telecommande-face.jpg) | ![Ouverte, avec la pile](docs/photos/02-telecommande-ouverte-pile.jpg) |
-| Face avant : boutons Maison, Auto, Timer, 1, 2, 3 | Ouverte : pile CR2032 et étiquette (VMN‑15LF01) |
-| ![Clavier et cadre](docs/photos/03-clavier-et-cadre.jpg) | ![Carte dans son support](docs/photos/04-carte-dans-support.jpg) |
-| Clavier et cadre mural séparés | Carte électronique dans son support transparent |
-| ![Membrane du clavier](docs/photos/05-clavier-membrane.jpg) | ![Carte, face composants](docs/photos/06-carte-face-composants.jpg) |
-| Membrane du clavier : 6 contacts et sa nappe | Carte, face composants |
-| ![Connecteur clavier](docs/photos/07-carte-connecteur-clavier.jpg) | ![Microcontrôleur](docs/photos/08-carte-microcontroleur.jpg) |
-| Connecteur de la nappe clavier (à gauche) | Détail du microcontrôleur |
-| ![Dos de la carte](docs/photos/09-carte-dos.jpg) | ![Composants du montage](docs/photos/10-composants-esp-nappes.jpg) |
-| Dos de la carte, pastilles de contact | Composants du montage : cartes ESP, nappes FFC, adaptateur FFC 8 broches |
-
-## Montage final
+Orcon 15RF remote taken apart, before modification. The photos are in [`docs/photos/`](docs/photos/).
 
 | | |
 |---|---|
-| ![Montage ouvert](docs/photos/11-montage-ouvert.jpg) | ![Montage dans le boîtier](docs/photos/12-montage-dans-boitier.jpg) |
-| Carte de la télécommande et ESP‑Mx DevKit, monté sur le PCB maison. La nappe FFC relie le connecteur clavier à l'adaptateur FFC 8 broches, et les fils rouge et noir amènent le 3 V de l'ESP sur le support de pile, via un connecteur débrochable. | ESP et adaptateur FFC dans le boîtier, prise micro‑USB accessible sur le côté. |
-| ![Boîtier fermé](docs/photos/13-boitier-ferme.jpg) | |
-| Boîtier imprimé en 3D, fermé et alimenté par USB. La LED est visible à travers le plastique. | |
+| ![Front](docs/photos/01-remote-front.jpg) | ![Open, with the battery](docs/photos/02-remote-open-battery.jpg) |
+| Front: House, Auto, Timer, 1, 2, 3 buttons | Open: CR2032 battery and label (VMN‑15LF01) |
+| ![Keypad and frame](docs/photos/03-keypad-and-frame.jpg) | ![Board in its holder](docs/photos/04-board-in-holder.jpg) |
+| Keypad and wall frame separated | Circuit board in its transparent holder |
+| ![Keypad membrane](docs/photos/05-keypad-membrane.jpg) | ![Board, component side](docs/photos/06-board-component-side.jpg) |
+| Keypad membrane: 6 contacts and its ribbon | Board, component side |
+| ![Keypad connector](docs/photos/07-board-keypad-connector.jpg) | ![Microcontroller](docs/photos/08-board-microcontroller.jpg) |
+| Keypad ribbon connector (on the left) | Close-up of the microcontroller |
+| ![Back of the board](docs/photos/09-board-back.jpg) | ![Parts of the build](docs/photos/10-parts-esp-ffc-cables.jpg) |
+| Back of the board, contact pads | Parts of the build: ESP boards, FFC cables, 8-pin FFC breakout |
 
-### Fichiers du boîtier
+## Final assembly
 
-Les fichiers STL du boîtier sont dans [`hardware/boitier/`](hardware/boitier/). Dimensions lues dans les fichiers, en mm :
+| | |
+|---|---|
+| ![Assembly, open](docs/photos/11-assembly-open.jpg) | ![Assembly in the enclosure](docs/photos/12-assembly-in-enclosure.jpg) |
+| Remote board and ESP‑Mx DevKit, mounted on the home-made PCB. The FFC cable links the keypad connector to the 8-pin FFC breakout, and the red and black wires bring the ESP's 3 V to the battery holder, through a detachable connector. | ESP and FFC breakout in the enclosure, micro‑USB socket reachable from the side. |
+| ![Enclosure closed](docs/photos/13-enclosure-closed.jpg) | |
+| 3D-printed enclosure, closed and powered over USB. The LED shows through the plastic. | |
 
-| Fichier | Dimensions (L × l × h) | Pièce probable |
+### Enclosure files
+
+The enclosure STL files are in [`hardware/enclosure/`](hardware/enclosure/). Dimensions read from the files, in mm:
+
+| File | Dimensions (L × W × H) | Likely part |
 |---|---|---|
-| [`Body2.stl`](hardware/boitier/Body2.stl) | 62 × 62 × 38 | Partie basse du boîtier |
-| [`Body3.stl`](hardware/boitier/Body3.stl) | 62 × 62 × 24 | Couvercle, qui s'emboîte sur la partie basse |
-| [`Body4.stl`](hardware/boitier/Body4.stl) | 53 × 53 × 1 | Plaque de support des cartes |
+| [`enclosure-bottom.stl`](hardware/enclosure/enclosure-bottom.stl) | 62 × 62 × 38 | Bottom of the enclosure |
+| [`enclosure-lid.stl`](hardware/enclosure/enclosure-lid.stl) | 62 × 62 × 24 | Lid, which fits onto the bottom |
+| [`board-plate.stl`](hardware/enclosure/board-plate.stl) | 53 × 53 × 1 | Plate that holds the boards |
 
-GitHub affiche un aperçu 3D des fichiers STL quand on clique dessus.
+GitHub shows a 3D preview of an STL file when you click on it.
 
-## Circuit imprimé
+## Printed circuit board
 
-Un petit PCB de 50 × 50 mm, dessiné sous EasyEDA (avril 2021) et fabriqué par JLCPCB, reçoit l'ESP‑Mx DevKit et l'adaptateur FFC. Il remplace le câblage volant entre les deux.
+A small 50 × 50 mm PCB, designed in EasyEDA (April 2021) and made by JLCPCB, holds the ESP‑Mx DevKit and the FFC breakout. It replaces the loose wiring between the two.
 
-| Dessus | Dessous (vu de dessous) |
+| Top | Bottom (seen from below) |
 |---|---|
-| ![PCB, face dessus](hardware/pcb/pcb-dessus.png) | ![PCB, face dessous](hardware/pcb/pcb-dessous.png) |
+| ![PCB, top side](hardware/pcb/pcb-top.png) | ![PCB, bottom side](hardware/pcb/pcb-bottom.png) |
 
-- **Face dessus** : sérigraphie de l'empreinte de l'ESP‑Mx DevKit (2 rangées de 12 broches) et du connecteur `8P` (2 × 4 broches) qui reçoit l'adaptateur FFC.
-- **Face dessous** : 6 pistes relient le connecteur `8P` aux GPIO 2, 4, 5, 12, 14 et 15, c'est‑à‑dire les 6 boutons pilotés par le firmware.
-- **Cotes** : rangées de l'ESP espacées de 25,4 mm, pas de 2,54 mm, trous de 1,0 mm pour l'ESP et de 0,889 mm pour le connecteur `8P`.
+- **Top side**: silkscreen of the ESP‑Mx DevKit footprint (2 rows of 12 pins) and of the `8P` connector (2 × 4 pins) that takes the FFC breakout.
+- **Bottom side**: 6 traces connect the `8P` connector to GPIOs 2, 4, 5, 12, 14 and 15, that is the 6 buttons driven by the firmware.
+- **Dimensions**: ESP rows 25.4 mm apart, 2.54 mm pitch, 1.0 mm holes for the ESP and 0.889 mm holes for the `8P` connector.
 
-Les fichiers Gerber sont dans [`hardware/pcb/gerber/`](hardware/pcb/gerber/). On peut les envoyer tels quels à un fabricant comme JLCPCB, en les zippant.
+The Gerber files are in [`hardware/pcb/gerber/`](hardware/pcb/gerber/). They can be sent as they are to a manufacturer such as JLCPCB, once zipped.
 
-> Le PCB fabriqué n'était pas tout à fait ajusté et il a fallu forcer un peu pour monter les composants. Avant de recommander une série, mesurez l'entraxe réel des rangées de votre carte ESP et la position du connecteur, puis corrigez l'empreinte si besoin.
+> The manufactured PCB did not fit perfectly and the parts had to be forced in a little. Before ordering a new batch, measure the actual row spacing of your ESP board and the position of the connector, then fix the footprint if needed.
 
-## Logiciel
+## Software
 
 | | |
 |---|---|
-| Environnement | [PlatformIO](https://platformio.org/) (extension VS Code recommandée dans `.vscode/extensions.json`) |
-| Framework | Arduino pour ESP8266 (`espressif8266`) |
-| Serveur web | [ESP Async WebServer](https://github.com/me-no-dev/ESPAsyncWebServer) |
-| Système de fichiers | LittleFS (pages web stockées dans la flash) |
-| Interface | HTML et JavaScript sans framework, CSS [Milligram](https://milligram.io/) |
+| Environment | [PlatformIO](https://platformio.org/) (VS Code extension recommended in `.vscode/extensions.json`) |
+| Framework | Arduino for ESP8266 (`espressif8266`) |
+| Web server | [ESP Async WebServer](https://github.com/me-no-dev/ESPAsyncWebServer) |
+| File system | LittleFS (web pages stored in flash) |
+| Interface | Plain HTML and JavaScript, [Milligram](https://milligram.io/) CSS |
 
-Arborescence :
+Layout:
 
 ```
-├── platformio.ini       Configuration PlatformIO (carte, librairies, LittleFS)
-├── src/main.cpp         Firmware : Wi‑Fi, serveur web, pilotage des GPIO
-├── include/wifi.h       Identifiants Wi‑Fi (non versionné, à créer)
-└── data/                Fichiers envoyés dans LittleFS
-    ├── index.html       Page de la télécommande
-    ├── script.js        Envoi des commandes et rafraîchissement du mode
-    ├── style.css        Mise en page
+├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
+├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
+├── include/wifi.h       Wi‑Fi credentials (not in Git, create it yourself)
+└── data/                Files uploaded to LittleFS
+    ├── index.html       Remote control page
+    ├── script.js        Sends commands and refreshes the mode
+    ├── style.css        Layout
     └── milligram.min.css
 ```
 
-Fonctionnement du firmware (`src/main.cpp`) :
+How the firmware works (`src/main.cpp`):
 
-- `setup()` connecte l'ESP au Wi‑Fi avec le nom d'hôte `vmc`, configure les GPIO et démarre le serveur web. Au démarrage, il envoie la commande **Medium**, ce qui place la VMC dans un état connu.
-- Les requêtes HTTP ne font qu'enregistrer la commande demandée. C'est `loop()` qui l'exécute, pour ne pas bloquer le serveur pendant les temporisations.
-- Le mode courant est mémorisé par l'ESP. Il n'est pas lu sur la VMC, qui ne renvoie aucune information.
+- `setup()` connects the ESP to Wi‑Fi with the hostname `vmc`, sets up the GPIOs and starts the web server. At boot, it sends the **Medium** command, which puts the ventilation unit in a known state.
+- HTTP requests only record the requested command. `loop()` runs it, so the server is not blocked during the delays.
+- The current mode is remembered by the ESP. It is not read from the ventilation unit, which sends nothing back.
 
 ## Installation
 
-### 1. Prérequis
+### 1. Requirements
 
-- VS Code avec l'extension PlatformIO, ou PlatformIO Core en ligne de commande.
-- Un câble USB pour flasher l'ESP.
+- VS Code with the PlatformIO extension, or PlatformIO Core on the command line.
+- A USB cable to flash the ESP.
 
-### 2. Identifiants Wi‑Fi
+### 2. Wi‑Fi credentials
 
-Créez le fichier `include/wifi.h`, qui est exclu de Git :
+Create the file `include/wifi.h`, which is excluded from Git:
 
 ```cpp
 #pragma once
 
-const char *ssid = "NOM_DU_RESEAU";
-const char *password = "MOT_DE_PASSE";
+const char *ssid = "NETWORK_NAME";
+const char *password = "PASSWORD";
 ```
 
-### 3. Compiler et flasher le firmware
+### 3. Build and flash the firmware
 
 ```bash
 pio run --target upload
 ```
 
-### 4. Envoyer l'interface web dans LittleFS
+### 4. Upload the web interface to LittleFS
 
 ```bash
 pio run --target uploadfs
 ```
 
-Cette étape est à refaire à chaque modification d'un fichier du dossier `data/`.
+Repeat this step every time a file in the `data/` folder changes.
 
-### 5. Vérifier
+### 5. Check
 
 ```bash
 pio device monitor
 ```
 
-Le moniteur série (115200 bauds) affiche la liste des fichiers LittleFS puis l'adresse IP obtenue. La page est ensuite accessible à l'adresse `http://vmc/` (si votre routeur résout les noms d'hôte) ou `http://<adresse-ip>/`. Il est conseillé de réserver une adresse IP fixe pour l'ESP dans le routeur, surtout pour Home Assistant.
+The serial monitor (115200 baud) shows the list of LittleFS files, then the IP address obtained. The page is then available at `http://vmc/` (if your router resolves hostnames) or `http://<ip-address>/`. It is a good idea to reserve a fixed IP address for the ESP in the router, especially for Home Assistant.
 
 ## Tests
 
-Des tests unitaires vérifient le firmware sur l'ordinateur, sans ESP ni télécommande :
+Unit tests check the firmware on the computer, without an ESP or a remote:
 
 ```bash
 pio test -e native
 ```
 
-`src/main.cpp` est compilé **tel quel** : les tests remplacent seulement les librairies Arduino, Wi‑Fi, LittleFS et serveur web par des imitations (dossier `test/mocks/`). Ces imitations enregistrent chaque changement d'état des broches et chaque pause, ce qui permet de vérifier, par exemple :
+`src/main.cpp` is compiled **as is**: the tests only replace the Arduino, Wi‑Fi, LittleFS and web server libraries with fakes (folder `test/mocks/`). These fakes record every pin change and every pause, which makes it possible to check, for example:
 
-- qu'au démarrage toutes les broches sont en sortie et relâchées, puis que Medium est envoyé ;
-- que chaque URL appuie sur le bon bouton, avec une impulsion de 500 ms et la LED allumée pendant l'envoi ;
-- que Max 15/30/60 min appuie 1, 2 ou 3 fois sur Timer, à 600 ms d'intervalle, puis que `/mode` revient au mode précédent à la fin du délai ;
-- que les commandes Max sont ignorées en mode High (comportement actuel, voir [Limites connues](#limites-connues)) ;
-- que les pages sont servies depuis LittleFS et qu'une URL inconnue répond `404`.
+- that at boot all pins are outputs and released, then that Medium is sent;
+- that each URL presses the right button, with a 500 ms pulse and the LED on while sending;
+- that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
+- that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
+- that pages are served from LittleFS and that an unknown URL answers `404`.
 
-Les tests tournent aussi automatiquement sur GitHub (onglet *Actions*) à chaque push et pull request, ainsi qu'une compilation du firmware pour l'ESP.
+The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for the ESP.
 
-## Utilisation
+## Usage
 
 | | |
 |---|---|
-| ![Interface sur smartphone, mode Medium](docs/screenshots/mobile-medium.png) | ![Interface sur smartphone, mode Max 30 min](docs/screenshots/mobile-max30.png) |
-| Au démarrage, l'ESP envoie Medium | Après un appui sur « Max 30 min » |
+| ![Interface on a smartphone, Medium mode](docs/screenshots/mobile-medium.png) | ![Interface on a smartphone, Max 30 min mode](docs/screenshots/mobile-max30.png) |
+| At boot, the ESP sends Medium | After pressing "Max 30 min" |
 
-La page affiche le dernier mode envoyé (rafraîchi toutes les 2 secondes, bouton correspondant mis en évidence) et huit boutons :
+The page shows the last mode sent (refreshed every 2 seconds, matching button highlighted) and eight buttons:
 
-| Bouton | Effet sur la VMC |
+| Button | Effect on the ventilation unit |
 |---|---|
-| Default | Position défaut, très économique, ignore les détecteurs |
-| Auto | Mode auto, piloté par le détecteur d'humidité intégré |
-| Low | Position 1 (basse) |
-| Medium | Position 2 (moyenne) |
-| High | Position 3 (élevée) |
-| Max 15 min | Position 3 pendant 15 min, puis retour à la position précédente |
-| Max 30 min | Position 3 pendant 30 min, puis retour à la position précédente |
-| Max 60 min | Position 3 pendant 60 min, puis retour à la position précédente |
+| Default | Default position, very low consumption, ignores the sensors |
+| Auto | Auto mode, driven by the built-in humidity sensor |
+| Low | Position 1 (low) |
+| Medium | Position 2 (medium) |
+| High | Position 3 (high) |
+| Max 15 min | Position 3 for 15 min, then back to the previous position |
+| Max 30 min | Position 3 for 30 min, then back to the previous position |
+| Max 60 min | Position 3 for 60 min, then back to the previous position |
 
-Les modes « Max » correspondent au bouton Timer de la télécommande, appuyé 1, 2 ou 3 fois. Ils sont ignorés si le mode courant est déjà High.
+The "Max" modes match the remote's Timer button, pressed 1, 2 or 3 times. They are ignored if the current mode is already High.
 
-## API HTTP
+## HTTP API
 
-Toutes les routes sont en `GET`, sur le port 80.
+All routes are `GET`, on port 80.
 
-| Route | Réponse | Rôle |
+| Route | Response | Purpose |
 |---|---|---|
-| `/` ou `/index.html` | page HTML | Interface web |
-| `/default` | `200` vide | Position défaut |
-| `/auto` | `200` vide | Mode automatique |
-| `/low` | `200` vide | Position basse |
-| `/medium` | `200` vide | Position moyenne |
-| `/high` | `200` vide | Position élevée |
-| `/max1` | `200` vide | Position élevée 15 min |
-| `/max2` | `200` vide | Position élevée 30 min |
-| `/max3` | `200` vide | Position élevée 60 min |
-| `/mode` | `text/plain` | Mode courant : `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` ou `Max 60 min` |
+| `/` or `/index.html` | HTML page | Web interface |
+| `/default` | empty `200` | Default position |
+| `/auto` | empty `200` | Automatic mode |
+| `/low` | empty `200` | Low position |
+| `/medium` | empty `200` | Medium position |
+| `/high` | empty `200` | High position |
+| `/max1` | empty `200` | High position for 15 min |
+| `/max2` | empty `200` | High position for 30 min |
+| `/max3` | empty `200` | High position for 60 min |
+| `/mode` | `text/plain` | Current mode: `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` or `Max 60 min` |
 
-Le `200` est renvoyé dès que la commande est enregistrée, avant qu'elle soit exécutée. Exemple :
+The `200` is sent as soon as the command is recorded, before it runs. Example:
 
 ```bash
 curl http://vmc/high
 curl http://vmc/mode   # -> High
 ```
 
-## Intégration Home Assistant
+## Home Assistant integration
 
-Home Assistant pilote la VMC avec `rest_command`, et peut lire le mode avec un capteur `rest`. Exemple de configuration (`configuration.yaml`) :
+Home Assistant controls the ventilation unit with `rest_command`, and can read the mode with a `rest` sensor. Example configuration (`configuration.yaml`):
 
 ```yaml
 rest_command:
@@ -304,32 +304,32 @@ sensor:
     scan_interval: 30
 ```
 
-Remplacez `vmc` par l'adresse IP de l'ESP si le nom d'hôte n'est pas résolu par votre réseau. Les commandes peuvent ensuite être appelées depuis des boutons du tableau de bord ou des automatisations, par exemple « Max 30 min » quand l'humidité de la salle de bain dépasse un seuil.
+Replace `vmc` with the ESP's IP address if your network does not resolve the hostname. The commands can then be called from dashboard buttons or automations, for example "Max 30 min" when the bathroom humidity goes above a threshold.
 
-## Rappel du fonctionnement de la VMC
+## How the ventilation unit works
 
-Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
+Summary of the Orcon MVS‑15RH manual, useful to understand the commands:
 
-- **4 positions** : défaut, basse (1), moyenne (2), élevée (3). Le débit de chaque position se règle par les commutateurs DIP de la carte de la VMC (tableaux de courbes A et B du manuel installateur).
-- **Mode auto** : la VMC mesure l'humidité en continu. Si elle monte de plus de 5 à 10 % en 3 minutes, la VMC passe en position 2 ou 3, puis revient en auto après 15 ou 30 minutes selon le commutateur DIP 8.
-- **Timer** : 1, 2 ou 3 appuis donnent la position élevée pendant 15, 30 ou 60 minutes, puis la VMC revient à la dernière position choisie. Le timer est interrompu par l'appui sur un autre bouton.
-- **Après une coupure de courant**, la VMC redémarre en mode automatique.
-- **Appairage d'une télécommande** : débrancher la VMC 5 secondes, la rebrancher, puis dans les 3 minutes appuyer en même temps sur `1` et `Auto` de la télécommande jusqu'à ce que sa LED clignote. Avec ce montage, l'appairage demande d'actionner les deux sorties en même temps, ce que le firmware ne fait pas aujourd'hui (voir les pistes d'amélioration).
-- **Réinitialisation de la télécommande** : appui simultané sur Défaut et Timer pendant 3 secondes.
+- **4 positions**: default, low (1), medium (2), high (3). The airflow of each position is set with the DIP switches on the unit's board (curve tables A and B in the installer manual).
+- **Auto mode**: the unit measures humidity continuously. If it rises by more than 5 to 10 % in 3 minutes, the unit switches to position 2 or 3, then goes back to auto after 15 or 30 minutes depending on DIP switch 8.
+- **Timer**: 1, 2 or 3 presses give the high position for 15, 30 or 60 minutes, then the unit goes back to the last position chosen. Pressing another button stops the timer.
+- **After a power cut**, the unit restarts in automatic mode.
+- **Pairing a remote**: unplug the unit for 5 seconds, plug it back in, then within 3 minutes press `1` and `Auto` on the remote at the same time until its LED blinks. With this build, pairing needs both outputs to be driven at the same time, which the firmware does not do today (see the ideas for improvement).
+- **Resetting the remote**: press Default and Timer together for 3 seconds.
 
-## Limites connues
+## Known limitations
 
-- **Pas d'authentification** : toute personne sur le réseau local peut piloter la VMC.
-- **Mode estimé** : le mode affiché est celui de la dernière commande envoyée par l'ESP. Une commande envoyée par une autre télécommande, un retour au mode auto après une coupure de courant ou la fin d'un timer côté VMC ne sont pas vus par l'ESP.
-- **Durée des modes Max** : l'ESP calcule la fin du mode Max avec l'horloge interne (`time(0)`), sans synchronisation NTP. Cela suffit pour une durée relative, mais n'a pas été vérifié en détail.
-- **Max ignoré en High** : les commandes Max sont ignorées sans message si le mode courant est High.
-- **Requêtes rapprochées** : une seule commande est mémorisée à la fois, et elle est effacée à la fin de son exécution. Une commande reçue pendant l'envoi d'une autre (jusqu'à environ 3 secondes pour Max 60 min) peut donc être perdue.
-- **Mises à jour** : le firmware se met à jour uniquement par USB (pas d'OTA).
+- **No authentication**: anyone on the local network can control the ventilation unit.
+- **Estimated mode**: the mode shown is the one from the last command sent by the ESP. A command sent by another remote, a return to auto mode after a power cut, or a timer ending on the unit side are not seen by the ESP.
+- **Max mode duration**: the ESP computes the end of the Max mode with the internal clock (`time(0)`), without NTP sync. This is enough for a relative duration, but has not been checked in detail.
+- **Max ignored in High**: Max commands are silently ignored if the current mode is High.
+- **Requests close together**: only one command is stored at a time, and it is cleared once it has run. A command received while another one is being sent (up to about 3 seconds for Max 60 min) can therefore be lost.
+- **Updates**: the firmware can only be updated over USB (no OTA).
 
-## Pistes d'amélioration
+## Ideas for improvement
 
-Ce qu'il manque au projet (appairage depuis l'interface, bouton de réinitialisation, gestion du Wi‑Fi, version plus compacte, OTA, MQTT…) est détaillé dans la [feuille de route](ROADMAP.md).
+What the project is missing (pairing from the interface, reset button, Wi‑Fi setup, more compact version, OTA, MQTT…) is detailed in the [roadmap](ROADMAP.md).
 
-## Licence
+## License
 
-Ce projet (code, fichiers du boîtier et du PCB) est distribué sous licence [MIT](LICENSE). La feuille de style [Milligram](https://milligram.io/) incluse dans `data/` est elle aussi sous licence MIT.
+This project (code, enclosure and PCB files) is released under the [MIT](LICENSE) license. The [Milligram](https://milligram.io/) stylesheet included in `data/` is also under the MIT license.
