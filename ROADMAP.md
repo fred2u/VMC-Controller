@@ -1,131 +1,131 @@
-# Feuille de route
+# Roadmap
 
-Le VMC Controller fonctionne au quotidien, mais reste un **prototype**. Ce document liste ce qu'il manque pour en faire une version plus aboutie, facile à reproduire et à maintenir. Il sert de base à une éventuelle version 2, la version actuelle n'étant pas destinée à évoluer.
+The VMC Controller works every day, but it is still a **prototype**. This document lists what is missing to turn it into a more polished version that is easy to reproduce and maintain. It is the starting point for a possible version 2, as the current version is not meant to change.
 
-Les points sont regroupés par thème. La priorité indique l'intérêt pour quelqu'un qui reproduit le projet.
+Items are grouped by topic. The priority shows how much it matters to someone reproducing the project.
 
-| Priorité | Sens |
+| Priority | Meaning |
 |---|---|
-| 🔴 Haute | Manque gênant à l'installation ou en cas de panne |
-| 🟠 Moyenne | Amélioration nette du confort ou de la fiabilité |
-| 🟢 Basse | Finition |
-| ✅ | Fait |
+| 🔴 High | Missing piece that gets in the way during installation or when something breaks |
+| 🟠 Medium | Clear improvement in comfort or reliability |
+| 🟢 Low | Finishing touch |
+| ✅ | Done |
 
 ---
 
-## 1. Fonctions de la télécommande
+## 1. Remote features
 
-### 🔴 Mode appairage de la télécommande
+### 🔴 Remote pairing mode
 
-**Situation actuelle** : pour appairer la télécommande avec la VMC (après un remplacement de la VMC ou une réinitialisation, par exemple), il faut appuyer **en même temps** sur `1` et `Auto`. Le firmware n'envoie qu'un appui à la fois, donc il faut ouvrir le boîtier et ponter les contacts à la main.
+**Today**: to pair the remote with the ventilation unit (after replacing the unit or after a reset, for example), `1` and `Auto` must be pressed **at the same time**. The firmware only sends one press at a time, so the enclosure has to be opened and the contacts bridged by hand.
 
-**À faire** :
+**To do**:
 
-- Ajouter une route `/pair` (et un bouton dans l'interface, éventuellement caché dans une page « Maintenance ») qui met GPIO2 (`1`) et GPIO5 (`Auto`) à l'état bas en même temps, jusqu'à ce que la LED de la télécommande clignote. La durée exacte est à déterminer par essai : le manuel dit seulement « jusqu'à ce que la LED clignote ».
-- Afficher la procédure côté VMC dans l'interface : débrancher la VMC 5 secondes, la rebrancher, puis lancer l'appairage dans les 3 minutes.
-- Ajouter de la même façon la **réinitialisation de la télécommande** (`Défaut` et `Timer` appuyés ensemble pendant 3 secondes).
-- Rendre `sendCommand` capable d'appuyer sur plusieurs boutons à la fois et de tenir l'appui plus longtemps, ce qui servira aux deux fonctions.
+- Add a `/pair` route (and a button in the interface, possibly tucked away in a "Maintenance" page) that pulls GPIO2 (`1`) and GPIO5 (`Auto`) LOW at the same time, until the remote's LED blinks. The exact duration has to be found by trial: the manual only says "until the LED blinks".
+- Show the procedure on the ventilation unit side in the interface: unplug the unit for 5 seconds, plug it back in, then start pairing within 3 minutes.
+- In the same way, add the **remote reset** (`Default` and `Timer` pressed together for 3 seconds).
+- Make `sendCommand` able to press several buttons at once and to hold the press longer, which both features need.
 
-### 🟠 Retour d'information sur les modes Max
+### 🟠 Feedback on the Max modes
 
-- Les commandes Max sont ignorées sans aucun message quand le mode courant est High. Il faudrait au moins le signaler dans la réponse HTTP et dans l'interface. Ce comportement est peut‑être voulu (la VMC est déjà en position élevée), mais ce n'est écrit nulle part.
-- Les routes de commande répondent `200` avant d'exécuter la commande. Une réponse qui donne le mode obtenu, ou une erreur, serait plus utile à Home Assistant.
-
----
-
-## 2. Matériel
-
-### 🔴 Bouton de réinitialisation usine sur le boîtier
-
-**Situation actuelle** : aucun bouton n'est accessible boîtier fermé. En cas de changement de box Internet ou de mot de passe Wi‑Fi, il faut ouvrir le boîtier et reflasher l'ESP.
-
-**À faire** :
-
-- Prévoir un bouton accessible de l'extérieur, encastré ou au bout d'un trombone pour éviter les appuis accidentels. Il peut être câblé sur une broche libre (GPIO13 par exemple) ou sur le bouton `FLASH` (GPIO0) de la carte.
-- Comportement proposé :
-  - appui court : redémarrage ;
-  - appui long (environ 10 secondes) : effacement des réglages Wi‑Fi enregistrés et retour en mode configuration (voir la partie Wi‑Fi plus bas) ;
-  - éventuellement, réinitialisation de la télécommande (voir plus haut).
-- Signaler chaque étape avec la LED (clignotement rapide pendant l'appui long, par exemple).
-- Prévoir l'emplacement du bouton dans le boîtier imprimé en 3D.
-
-### 🟠 Version plus compacte
-
-**Situation actuelle** : le montage est un prototype, avec une carte de développement ESP‑Mx DevKit, un adaptateur FFC, une nappe et un PCB maison de 50 × 50 mm dont l'ajustement n'était pas parfait. Le tout tient dans un boîtier d'environ 62 × 62 × 42 mm.
-
-**Pistes pour une version 2** :
-
-- **Un seul PCB** qui porte directement :
-  - un module ESP nu (ESP‑12F ou ESP8285) à la place de la carte de développement ;
-  - un connecteur FPC 8 broches au pas de 0,5 mm soudé sur la carte, pour brancher la nappe de la télécommande sans adaptateur ;
-  - une prise USB (de préférence USB‑C) et un régulateur 3,3 V ;
-  - le bouton de réinitialisation et une LED d'état.
-- **Empilement** : poser la carte de la télécommande sur le nouveau PCB, ou l'inverse, plutôt que côte à côte.
-- **Empreintes à vérifier** avant de commander : mesurer les cotes réelles des composants (entraxes, position des connecteurs) et imprimer le PCB à l'échelle 1:1 sur papier pour vérifier l'ajustement.
-- **Programmation** : prévoir un connecteur série (RX, TX, GND, GPIO0, RST) pour le premier flash, puis passer à l'OTA.
-- **Boîtier** : le redessiner autour du nouveau PCB et publier le fichier source (STEP ou Fusion 360) en plus des STL, pour qu'il puisse être modifié.
-
-### 🟢 Broches de démarrage
-
-GPIO2 et GPIO15 servent aussi à choisir le mode de démarrage de l'ESP8266. Si le circuit de la télécommande tire l'une de ces broches dans le mauvais sens au démarrage, l'ESP ne démarre pas. Sur une nouvelle carte, utiliser de préférence des broches sans rôle au démarrage (GPIO4, 5, 12, 13, 14), ou vérifier ce point.
+- Max commands are silently ignored when the current mode is High. This should at least be reported in the HTTP response and in the interface. The behaviour may be on purpose (the unit is already in the high position), but it is not written down anywhere.
+- The command routes answer `200` before running the command. A response that gives the resulting mode, or an error, would be more useful to Home Assistant.
 
 ---
 
-## 3. Logiciel
+## 2. Hardware
 
-### 🔴 Gestion du Wi‑Fi par une librairie
+### 🔴 Factory reset button on the enclosure
 
-**Situation actuelle** : le nom et le mot de passe du réseau sont écrits en dur dans `include/wifi.h` et compilés dans le firmware. Pour changer de réseau, il faut recompiler et reflasher. Si le réseau est indisponible, l'ESP ne propose aucune solution de secours.
+**Today**: no button can be reached with the enclosure closed. After changing the Internet box or the Wi‑Fi password, the enclosure has to be opened and the ESP reflashed.
 
-**À faire** :
+**To do**:
 
-- Utiliser une librairie de configuration Wi‑Fi, par exemple [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager), compatible avec le serveur web asynchrone déjà utilisé, ou [WiFiManager](https://github.com/tzapu/WiFiManager).
-- Au premier démarrage, ou si le réseau enregistré est introuvable, l'ESP ouvre son propre point d'accès (par exemple `VMC-Setup`) avec un portail captif pour choisir le réseau et saisir le mot de passe.
-- Les identifiants sont enregistrés dans la mémoire flash et effacés par le bouton de réinitialisation usine.
-- Supprimer `include/wifi.h` et les instructions correspondantes du README.
-- Annoncer l'ESP sur le réseau par mDNS (`vmc.local`), pour ne pas dépendre du routeur pour la résolution du nom.
+- Add a button that can be reached from outside, recessed or pressed with a paperclip to avoid accidental presses. It can be wired to a free pin (GPIO13 for example) or to the board's `FLASH` button (GPIO0).
+- Suggested behaviour:
+  - short press: restart;
+  - long press (about 10 seconds): erase the saved Wi‑Fi settings and go back to setup mode (see the Wi‑Fi section below);
+  - possibly, reset the remote (see above).
+- Show each step with the LED (fast blinking during the long press, for example).
+- Make room for the button in the 3D-printed enclosure.
 
-### 🟠 Mises à jour par Wi‑Fi (OTA)
+### 🟠 More compact version
 
-Ajouter ArduinoOTA ou une page de mise à jour web (`/update`), pour mettre à jour le firmware et l'interface sans ouvrir le boîtier ni brancher de câble.
+**Today**: the build is a prototype, with an ESP‑Mx DevKit development board, an FFC breakout, a ribbon cable and a home-made 50 × 50 mm PCB that did not fit perfectly. It all fits in an enclosure of about 62 × 62 × 42 mm.
 
-### 🟠 Intégration Home Assistant native
+**Ideas for a version 2**:
 
-Aujourd'hui, l'intégration passe par une configuration `rest_command` manuelle. Une intégration MQTT avec la découverte automatique de Home Assistant créerait directement un appareil « VMC » avec ses boutons et un capteur de mode. Elle permettrait aussi de connaître l'état sans interroger `/mode` en boucle.
+- **A single PCB** that directly carries:
+  - a bare ESP module (ESP‑12F or ESP8285) instead of the development board;
+  - an 8-pin 0.5 mm pitch FPC connector soldered on the board, to plug in the remote's ribbon without a breakout;
+  - a USB socket (preferably USB‑C) and a 3.3 V regulator;
+  - the reset button and a status LED.
+- **Stacking**: put the remote board on top of the new PCB, or the other way round, rather than side by side.
+- **Footprints to check** before ordering: measure the real dimensions of the parts (row spacing, connector positions) and print the PCB at 1:1 scale on paper to check the fit.
+- **Programming**: add a serial header (RX, TX, GND, GPIO0, RST) for the first flash, then switch to OTA.
+- **Enclosure**: redesign it around the new PCB and publish the source file (STEP or Fusion 360) along with the STLs, so it can be modified.
 
-### 🟠 Fiabilité des commandes
+### 🟢 Boot pins
 
-- **Commandes perdues** : une seule commande est mémorisée et elle est effacée à la fin de son exécution. Une commande reçue pendant l'envoi d'une autre (jusqu'à environ 3 secondes pour Max 60 min) est perdue. Il faudrait une petite file d'attente, ou au moins refuser la requête avec un code `409` ou `503`.
-- **Variables partagées** : la commande en cours est une `String` écrite par le serveur asynchrone et lue par `loop()` sans protection. Une variable simple (un entier ou une énumération) marquée `volatile` serait plus sûre.
-- **Temporisations bloquantes** : `loop()` utilise `delay()` pendant l'envoi des impulsions. Une machine à états basée sur `millis()` garderait l'ESP réactif.
-- **Durée des modes Max** : la fin du mode Max est calculée avec `time(0)`, sans synchronisation NTP. Il serait plus simple et plus sûr d'utiliser `millis()`.
-
-### 🟢 État affiché
-
-Le mode affiché est celui de la dernière commande envoyée par l'ESP, et il n'est pas lu sur la VMC. Une commande envoyée par une autre télécommande, ou le retour en mode auto après une coupure de courant, ne sont pas vus. C'est une limite du montage, puisque la télécommande ne reçoit rien. Il faut au moins l'indiquer dans l'interface (« dernier mode envoyé »).
-
-✅ L'interface affiche maintenant « Last mode sent » au lieu de « Current mode ». La limite elle‑même reste.
-
-### 🟢 Sécurité
-
-Aucune authentification n'est en place. C'est acceptable sur un réseau local de confiance, mais il faudrait au minimum une authentification HTTP basique en option, surtout si l'OTA est ajouté, puisqu'elle permettrait de remplacer le firmware.
+GPIO2 and GPIO15 are also used to select the ESP8266 boot mode. If the remote's circuit pulls one of these pins the wrong way at boot, the ESP does not start. On a new board, prefer pins with no boot role (GPIO4, 5, 12, 13, 14), or check this point.
 
 ---
 
-## 4. Interface web
+## 3. Software
 
-- ✅ ~~Uniformiser la langue : les boutons sont en anglais (« Low », « Medium », « High »), sauf « Automatique », et la page est déclarée en français.~~ Tout est en anglais : « Automatique » devient « Auto » (aussi dans la réponse de `/mode`) et la page est déclarée en anglais.
-- ✅ ~~Mettre en évidence le mode actif sur le bouton correspondant, en plus du texte « Current mode ».~~ Le bouton du mode actif est rempli.
-- ✅ ~~Corriger une faute de frappe dans `data/style.css` : `margin: 0 10px O O;` utilise la lettre `O` au lieu du chiffre `0`, ce qui rend la règle invalide.~~ Remplacé par `margin: 0 10px;`.
-- ✅ Afficher le mode dès l'ouverture de la page, sans attendre le premier rafraîchissement de 2 secondes.
-- ✅ Corriger la balise `<meta>` de `index.html`, où `charset` était collé à l'attribut `viewport` et donc ignoré.
-- 🟢 Ajouter une page « Maintenance » : appairage, réinitialisation, informations système (version, adresse IP, force du signal Wi‑Fi, temps de fonctionnement).
+### 🔴 Wi‑Fi setup with a library
+
+**Today**: the network name and password are hard-coded in `include/wifi.h` and compiled into the firmware. To change network, you have to rebuild and reflash. If the network is unavailable, the ESP offers no fallback.
+
+**To do**:
+
+- Use a Wi‑Fi setup library, for example [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager), which works with the async web server already in use, or [WiFiManager](https://github.com/tzapu/WiFiManager).
+- On first boot, or if the saved network cannot be found, the ESP opens its own access point (for example `VMC-Setup`) with a captive portal to pick the network and enter the password.
+- The credentials are saved in flash memory and erased by the factory reset button.
+- Remove `include/wifi.h` and the matching instructions from the README.
+- Announce the ESP on the network with mDNS (`vmc.local`), so name resolution does not depend on the router.
+
+### 🟠 Updates over Wi‑Fi (OTA)
+
+Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.
+
+### 🟠 Native Home Assistant integration
+
+Today, the integration goes through a manual `rest_command` configuration. An MQTT integration with Home Assistant auto-discovery would directly create a "VMC" device with its buttons and a mode sensor. It would also give the state without polling `/mode` over and over.
+
+### 🟠 Command reliability
+
+- **Lost commands**: only one command is stored and it is cleared once it has run. A command received while another one is being sent (up to about 3 seconds for Max 60 min) is lost. A small queue is needed, or at least rejecting the request with a `409` or `503` code.
+- **Shared variables**: the current command is a `String` written by the async server and read by `loop()` without protection. A plain variable (an integer or an enum) marked `volatile` would be safer.
+- **Blocking delays**: `loop()` uses `delay()` while sending the pulses. A state machine based on `millis()` would keep the ESP responsive.
+- **Max mode duration**: the end of the Max mode is computed with `time(0)`, without NTP sync. Using `millis()` would be simpler and safer.
+
+### 🟢 Displayed state
+
+The mode shown is the one from the last command sent by the ESP, and it is not read from the ventilation unit. A command sent by another remote, or the return to auto mode after a power cut, are not seen. This is a limit of the build, since the remote receives nothing. It should at least be stated in the interface ("last mode sent").
+
+✅ The interface now shows "Last mode sent" instead of "Current mode". The limitation itself remains.
+
+### 🟢 Security
+
+There is no authentication. That is acceptable on a trusted local network, but there should at least be optional HTTP basic authentication, especially if OTA is added, since OTA would allow the firmware to be replaced.
 
 ---
 
-## 5. Projet et documentation
+## 4. Web interface
 
-- 🟠 Ajouter un schéma électrique, par exemple exporté depuis EasyEDA, en plus du PCB.
-- ✅ ~~Ajouter une vérification de compilation automatique (GitHub Actions avec PlatformIO), pour s'assurer que le firmware compile toujours avec les versions récentes des librairies.~~ Fait avec les tests unitaires (`.github/workflows/ci.yml`).
-- ✅ ~~Fixer la version de la librairie ESP Async WebServer dans `platformio.ini`. Sans version, une mise à jour de la librairie peut casser la compilation.~~ Fait : les dépôts GitHub sont épinglés sur un commit précis.
-- 🟢 Numéroter les versions du firmware (tags Git) et afficher la version dans l'interface.
+- ✅ ~~Use one language: the buttons are in English ("Low", "Medium", "High"), except "Automatique", and the page is declared as French.~~ Everything is in English: "Automatique" becomes "Auto" (also in the `/mode` response) and the page is declared as English.
+- ✅ ~~Highlight the active mode on its button, in addition to the "Current mode" text.~~ The active mode's button is filled.
+- ✅ ~~Fix a typo in `data/style.css`: `margin: 0 10px O O;` uses the letter `O` instead of the digit `0`, which makes the rule invalid.~~ Replaced with `margin: 0 10px;`.
+- ✅ Show the mode as soon as the page opens, without waiting for the first 2-second refresh.
+- ✅ Fix the `<meta>` tag in `index.html`, where `charset` was stuck to the `viewport` attribute and therefore ignored.
+- 🟢 Add a "Maintenance" page: pairing, reset, system information (version, IP address, Wi‑Fi signal strength, uptime).
+
+---
+
+## 5. Project and documentation
+
+- 🟠 Add a circuit diagram, for example exported from EasyEDA, in addition to the PCB.
+- ✅ ~~Add an automatic build check (GitHub Actions with PlatformIO), to make sure the firmware still builds with recent library versions.~~ Done along with the unit tests (`.github/workflows/ci.yml`).
+- ✅ ~~Pin the ESP Async WebServer library version in `platformio.ini`. Without a version, a library update can break the build.~~ Done: the GitHub repositories are pinned to a specific commit.
+- 🟢 Number the firmware versions (Git tags) and show the version in the interface.
