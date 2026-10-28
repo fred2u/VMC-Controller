@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Unit tests (native)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install platformio
+      - run: pio test -e native
+
+  build:
+    name: Firmware build (ESP8285)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install platformio
+      # include/wifi.h is gitignored (it holds the Wi-Fi password).
+      - run: printf '#pragma once\nconst char *ssid = "ci";\nconst char *password = "ci";\n' > include/wifi.h
+      - run: pio run -e espmxdevkit

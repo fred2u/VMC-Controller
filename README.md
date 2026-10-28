@@ -18,13 +18,14 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 6. [Circuit imprimé](#circuit-imprimé)
 7. [Logiciel](#logiciel)
 8. [Installation](#installation)
-9. [Utilisation](#utilisation)
-10. [API HTTP](#api-http)
-11. [Intégration Home Assistant](#intégration-home-assistant)
-12. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
-13. [Limites connues](#limites-connues)
-14. [Pistes d'amélioration](#pistes-damélioration)
-15. [Licence](#licence)
+9. [Tests](#tests)
+10. [Utilisation](#utilisation)
+11. [API HTTP](#api-http)
+12. [Intégration Home Assistant](#intégration-home-assistant)
+13. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
+14. [Limites connues](#limites-connues)
+15. [Pistes d'amélioration](#pistes-damélioration)
+16. [Licence](#licence)
 
 ---
 
@@ -216,6 +217,24 @@ pio device monitor
 ```
 
 Le moniteur série (115200 bauds) affiche la liste des fichiers LittleFS puis l'adresse IP obtenue. La page est ensuite accessible à l'adresse `http://vmc/` (si votre routeur résout les noms d'hôte) ou `http://<adresse-ip>/`. Il est conseillé de réserver une adresse IP fixe pour l'ESP dans le routeur, surtout pour Home Assistant.
+
+## Tests
+
+Des tests unitaires vérifient le firmware sur l'ordinateur, sans ESP ni télécommande :
+
+```bash
+pio test -e native
+```
+
+`src/main.cpp` est compilé **tel quel** : les tests remplacent seulement les librairies Arduino, Wi‑Fi, LittleFS et serveur web par des imitations (dossier `test/mocks/`). Ces imitations enregistrent chaque changement d'état des broches et chaque pause, ce qui permet de vérifier, par exemple :
+
+- qu'au démarrage toutes les broches sont en sortie et relâchées, puis que Medium est envoyé ;
+- que chaque URL appuie sur le bon bouton, avec une impulsion de 500 ms et la LED allumée pendant l'envoi ;
+- que Max 15/30/60 min appuie 1, 2 ou 3 fois sur Timer, à 600 ms d'intervalle, puis que `/mode` revient au mode précédent à la fin du délai ;
+- que les commandes Max sont ignorées en mode High (comportement actuel, voir [Limites connues](#limites-connues)) ;
+- que les pages sont servies depuis LittleFS et qu'une URL inconnue répond `404`.
+
+Les tests tournent aussi automatiquement sur GitHub (onglet *Actions*) à chaque push et pull request, ainsi qu'une compilation du firmware pour l'ESP.
 
 ## Utilisation
 
