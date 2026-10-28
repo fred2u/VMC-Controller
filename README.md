@@ -226,14 +226,16 @@ Without this variable, the firmware still builds (with a warning) but only accep
 
 ### 3. Build and flash the firmware
 
+Over USB. `-e` picks the board: `espmxdevkit` is the production board inside the VMC, `nodemcuv2` the test board (see [Test board (NodeMCU)](#test-board-nodemcu)). Without `-e`, PlatformIO uses the production board.
+
 ```bash
-pio run --target upload
+pio run -e espmxdevkit --target upload
 ```
 
 ### 4. Upload the web interface to LittleFS
 
 ```bash
-pio run --target uploadfs
+pio run -e espmxdevkit --target uploadfs
 ```
 
 Repeat this step every time a file in the `data/` folder changes.
@@ -261,18 +263,13 @@ The serial monitor (115200 baud) shows the list of LittleFS files, the Wi‑Fi m
 Once the first flash over USB is done and the ESP is on Wi‑Fi, the next updates can go over the network, without opening the enclosure. The ESP announces itself as `vmc.local` (mDNS) and asks for the password it was built with (`VMC_OTA_PASSWORD`, see step 2):
 
 ```bash
-export PLATFORMIO_UPLOAD_FLAGS="--auth=$VMC_OTA_PASSWORD"
-pio run --target upload --upload-port vmc.local        # firmware
-pio run --target uploadfs --upload-port vmc.local      # web interface
+pio run -e espmxdevkit --target upload --upload-port vmc.local     # firmware
+pio run -e espmxdevkit --target uploadfs --upload-port vmc.local   # web interface
 ```
 
-```powershell
-$env:PLATFORMIO_UPLOAD_FLAGS = "--auth=$env:VMC_OTA_PASSWORD"
-pio run --target upload --upload-port vmc.local        # firmware
-pio run --target uploadfs --upload-port vmc.local      # web interface
-```
+With `VMC_OTA_PASSWORD` set, `scripts/ota_auth.py` gives the password to the upload over Wi‑Fi by itself, so there is nothing else to set. Do not put `--auth` in `PLATFORMIO_UPLOAD_FLAGS`: that variable also applies to USB uploads, which then fail with `esptool: error: unrecognized arguments: --auth=...` (in PowerShell, clear it with `Remove-Item Env:PLATFORMIO_UPLOAD_FLAGS`).
 
-Add `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
+Use `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
 
 The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 28 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
 
