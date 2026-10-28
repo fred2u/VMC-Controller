@@ -2,3 +2,4 @@
 #pragma once
 const char *ssid = "test-ssid";
 const char *password = "test-password";
+#define OTA_PASSWORD "test-ota-password"

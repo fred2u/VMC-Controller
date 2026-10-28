@@ -83,11 +83,11 @@ GPIO2 and GPIO15 are also used to select the ESP8266 boot mode. If the remote's 
 - On first boot, or if the saved network cannot be found, the ESP opens its own access point (for example `VMC-Setup`) with a captive portal to pick the network and enter the password.
 - The credentials are saved in flash memory and erased by the factory reset button.
 - Remove `include/wifi.h` and the matching instructions from the README.
-- Announce the ESP on the network with mDNS (`vmc.local`), so name resolution does not depend on the router.
+- Announce the ESP on the network with mDNS (`vmc.local`), so name resolution does not depend on the router. ArduinoOTA already does this when `OTA_PASSWORD` is set.
 
-### 🟠 Updates over Wi‑Fi (OTA)
+### ✅ Updates over Wi‑Fi (OTA)
 
-Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.
+~~Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.~~ ArduinoOTA is in place, protected by `OTA_PASSWORD`, see the README. A web update page (`/update`) could still be added, to update without PlatformIO.
 
 ### 🟠 Native Home Assistant integration
 
@@ -127,5 +127,5 @@ There is no authentication. That is acceptable on a trusted local network, but t
 
 - 🟠 Add a circuit diagram, for example exported from EasyEDA, in addition to the PCB.
 - ✅ ~~Add an automatic build check (GitHub Actions with PlatformIO), to make sure the firmware still builds with recent library versions.~~ Done along with the unit tests (`.github/workflows/ci.yml`).
-- ✅ ~~Pin the ESP Async WebServer library version in `platformio.ini`. Without a version, a library update can break the build.~~ Done: the GitHub repositories are pinned to a specific commit.
+- ✅ ~~Pin the ESP Async WebServer library version in `platformio.ini`. Without a version, a library update can break the build.~~ Done: the libraries now come from the maintained ESP32Async forks, pinned to a release, and the `espressif8266` platform is pinned too.
 - 🟢 Number the firmware versions (Git tags) and show the version in the interface.
