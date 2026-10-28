@@ -108,6 +108,18 @@ Télécommande Orcon 15RF démontée, avant modification. Les photos sont dans [
 | ![Boîtier fermé](docs/photos/13-boitier-ferme.jpg) | |
 | Boîtier imprimé en 3D, fermé et alimenté par USB. La LED est visible à travers le plastique. | |
 
+### Fichiers du boîtier
+
+Les fichiers STL du boîtier sont dans [`hardware/boitier/`](hardware/boitier/). Dimensions lues dans les fichiers, en mm :
+
+| Fichier | Dimensions (L × l × h) | Pièce probable |
+|---|---|---|
+| [`Body2.stl`](hardware/boitier/Body2.stl) | 62 × 62 × 38 | Partie basse du boîtier |
+| [`Body3.stl`](hardware/boitier/Body3.stl) | 62 × 62 × 24 | Couvercle, qui s'emboîte sur la partie basse |
+| [`Body4.stl`](hardware/boitier/Body4.stl) | 53 × 53 × 1 | Plaque de support des cartes |
+
+GitHub affiche un aperçu 3D des fichiers STL quand on clique dessus.
+
 ## Logiciel
 
 | | |
@@ -268,4 +280,4 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 - Intégration Home Assistant native, par MQTT avec découverte automatique, à la place de la configuration REST manuelle.
 - Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
 - Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
-- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP) et un schéma de câblage.
+- Ajouter un schéma de câblage, et le fichier source du boîtier (STEP ou Fusion 360) pour pouvoir le modifier.
