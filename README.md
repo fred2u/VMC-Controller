@@ -309,11 +309,7 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 
 ## Pistes d'amélioration
 
-- Mises à jour du firmware par Wi‑Fi (ArduinoOTA).
-- Intégration Home Assistant native, par MQTT avec découverte automatique, à la place de la configuration REST manuelle.
-- Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
-- Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
-- Ajouter un schéma de câblage, et le fichier source du boîtier (STEP ou Fusion 360) pour pouvoir le modifier.
+Ce qu'il manque au projet (appairage depuis l'interface, bouton de réinitialisation, gestion du Wi‑Fi, version plus compacte, OTA, MQTT…) est détaillé dans la [feuille de route](ROADMAP.md).
 
 ## Licence
 
