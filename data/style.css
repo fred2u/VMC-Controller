@@ -173,3 +173,24 @@ footer dl {
 }
 footer dt { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
 footer dd { margin: 0; color: var(--text); font-weight: 600; word-break: break-all; }
+
+footer a, .back { color: var(--accent); text-decoration: none; font-weight: 600; }
+.back { margin-right: 4px; }
+
+/* Maintenance page. */
+.panel { padding: 16px; }
+.panel p, .panel ol { margin: 0 0 12px; }
+.panel ol { padding-left: 20px; }
+.panel li { margin-bottom: 4px; }
+.panel > button { width: 100%; }
+.panel .hint { margin: 12px 0 0; }
+.facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0 0 16px;
+}
+.facts dt { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.facts dd { margin: 0; font-weight: 600; word-break: break-all; }
+button.danger { color: var(--bad); }
+.notice { min-height: 1.4em; text-align: center; font-weight: 600; color: var(--accent); }

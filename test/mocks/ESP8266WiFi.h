@@ -24,6 +24,8 @@ public:
     savedSsid = s;
   }
   void begin() { beginSavedCount++; }
+  // disconnect(true) also erases the saved network (persistent mode).
+  void disconnect(bool) { savedSsid = ""; disconnectCount++; }
   String SSID() { return savedSsid; }
   template <typename F>
   WiFiEventHandler onStationModeGotIP(F) { return WiFiEventHandler(); }
@@ -35,6 +37,7 @@ public:
   String ssidUsed;
   String savedSsid; // network saved in flash by the Wi-Fi SDK
   int beginSavedCount = 0;
+  int disconnectCount = 0;
   int modeSet = 0;
   int statusValue = WL_DISCONNECTED;
   IPAddress ipValue;

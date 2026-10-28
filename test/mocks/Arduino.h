@@ -34,6 +34,20 @@ inline String operator+(const char *a, const String &b) { return String(std::str
 inline bool operator==(const char *a, const String &b) { return b == a; }
 inline bool operator!=(const char *a, const String &b) { return b != a; }
 
+// Fake ESP object: restart() is only counted.
+class FakeESP
+{
+public:
+  void restart() { restartCount++; }
+  uint32_t getFreeHeap() { return freeHeap; }
+  String getResetReason() { return resetReason; }
+
+  int restartCount = 0;
+  uint32_t freeHeap = 31000;
+  String resetReason = "Power On";
+};
+extern FakeESP ESP;
+
 class IPAddress
 {
 public:
