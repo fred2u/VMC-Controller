@@ -204,13 +204,21 @@ How the firmware works (`src/main.cpp`):
 - VS Code with the PlatformIO extension, or PlatformIO Core on the command line.
 - A USB cable to flash the ESP.
 
+The `pio` commands below go in a **PlatformIO terminal**: in VS Code, open the PlatformIO sidebar, then *Quick Access > Miscellaneous > New Terminal*. A plain PowerShell or terminal window usually does not find `pio`, because the extension does not add it to the PATH. The commands are given for bash (Linux, macOS) and PowerShell (Windows), where they differ.
+
 ### 2. OTA password
 
 No password is stored in the project: the Wi‑Fi network is chosen after flashing, from a setup portal (step 5), and the password for updates over Wi‑Fi comes from the `VMC_OTA_PASSWORD` environment variable, read at build time by `scripts/ota_password.py`. Set it in the terminal before building:
 
 ```bash
-export VMC_OTA_PASSWORD="choose-a-password"   # PowerShell: $env:VMC_OTA_PASSWORD="choose-a-password"
+export VMC_OTA_PASSWORD="choose-a-password"
 ```
+
+```powershell
+$env:VMC_OTA_PASSWORD = "choose-a-password"
+```
+
+The variable only lasts as long as the terminal: set it again in each new terminal. On Windows, to keep it for good, run `setx VMC_OTA_PASSWORD "choose-a-password"` once, then open a new terminal (and restart VS Code so that its terminals see it).
 
 Without this variable, the firmware still builds (with a warning) but only accepts updates over USB. Use the same password for every build: the ESP asks for the one it was built with.
 
@@ -258,6 +266,12 @@ pio run --target upload --upload-port vmc.local        # firmware
 pio run --target uploadfs --upload-port vmc.local      # web interface
 ```
 
+```powershell
+$env:PLATFORMIO_UPLOAD_FLAGS = "--auth=$env:VMC_OTA_PASSWORD"
+pio run --target upload --upload-port vmc.local        # firmware
+pio run --target uploadfs --upload-port vmc.local      # web interface
+```
+
 Add `-e nodemcuv2` for the test board. If `vmc.local` does not resolve, use the ESP's IP address instead. The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port).
 
 The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 28 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
@@ -271,6 +285,8 @@ Unit tests check the firmware on the computer, without an ESP or a remote:
 ```bash
 pio test -e native
 ```
+
+The tests are built by the computer's own C++ compiler, not the ESP one. Linux and macOS usually have it already (`g++` or `clang`). On Windows, install a MinGW-w64 `gcc`/`g++`, for example [WinLibs](https://winlibs.com/), add its `bin` folder to the PATH, then open a new PlatformIO terminal: `g++ --version` must answer.
 
 `src/main.cpp` is compiled **as is**: the tests only replace the Arduino, Wi‑Fi, LittleFS and web server libraries with fakes (folder `test/mocks/`). These fakes record every pin change and every pause, which makes it possible to check, for example:
 
