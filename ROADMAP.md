@@ -73,17 +73,14 @@ GPIO2 and GPIO15 are also used to select the ESP8266 boot mode. If the remote's 
 
 ## 3. Software
 
-### 🔴 Wi‑Fi setup with a library
+### ✅ Wi‑Fi setup with a library
 
-**Today**: the network name and password are hard-coded in `include/wifi.h` and compiled into the firmware. To change network, you have to rebuild and reflash. If the network is unavailable, the ESP offers no fallback.
+~~The network name and password were hard-coded in `include/wifi.h`.~~ [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager) is in place: when the ESP cannot reach a saved network, it opens the `VMC-Setup` access point with a captive portal for 3 minutes, see "Connect to Wi‑Fi" in the README. `include/wifi.h` is now optional (OTA password and fallback network).
 
-**To do**:
+Still to do:
 
-- Use a Wi‑Fi setup library, for example [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager), which works with the async web server already in use, or [WiFiManager](https://github.com/tzapu/WiFiManager).
-- On first boot, or if the saved network cannot be found, the ESP opens its own access point (for example `VMC-Setup`) with a captive portal to pick the network and enter the password.
-- The credentials are saved in flash memory and erased by the factory reset button.
-- Remove `include/wifi.h` and the matching instructions from the README.
-- Announce the ESP on the network with mDNS (`vmc.local`), so name resolution does not depend on the router. ArduinoOTA already does this when `OTA_PASSWORD` is set.
+- Erase the saved network with the factory reset button (see "Factory reset" above) or from a maintenance page.
+- Optionally protect the `VMC-Setup` access point with a password.
 
 ### ✅ Updates over Wi‑Fi (OTA)
 

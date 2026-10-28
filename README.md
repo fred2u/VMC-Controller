@@ -172,6 +172,7 @@ The Gerber files are in [`hardware/pcb/gerber/`](hardware/pcb/gerber/). They can
 | Environment | [PlatformIO](https://platformio.org/) (VS Code extension recommended in `.vscode/extensions.json`) |
 | Framework | Arduino for ESP8266 (`espressif8266`) |
 | Web server | [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) and [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP), maintained by ESP32Async, versions pinned in `platformio.ini` |
+| Wi‑Fi setup | [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager) (captive portal on the same async web server) |
 | Updates over Wi‑Fi | ArduinoOTA (included in the Arduino core) |
 | File system | LittleFS (web pages stored in flash) |
 | Interface | Plain HTML and JavaScript, [Milligram](https://milligram.io/) CSS |
@@ -182,8 +183,8 @@ Layout:
 ├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
 ├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
 ├── include/
-│   ├── wifi.h.example   Template for the Wi‑Fi credentials
-│   └── wifi.h           Your copy with the credentials (not in Git)
+│   ├── wifi.h.example   Template for the optional settings (OTA password, fallback network)
+│   └── wifi.h           Your copy (not in Git)
 └── data/                Files uploaded to LittleFS
     ├── index.html       Remote control page
     ├── script.js        Sends commands and refreshes the mode
@@ -193,7 +194,7 @@ Layout:
 
 How the firmware works (`src/main.cpp`):
 
-- `setup()` connects the ESP to Wi‑Fi with the hostname `vmc`, sets up the GPIOs and starts the web server. At boot, it sends the **Medium** command, which puts the ventilation unit in a known state.
+- `setup()` sets up the GPIOs, connects the ESP to Wi‑Fi with the hostname `vmc` (or opens the `VMC-Setup` portal, see [Connect to Wi‑Fi](#5-connect-to-wifi)) and starts the web server. At boot, it sends the **Medium** command, which puts the ventilation unit in a known state.
 - HTTP requests only record the requested command. `loop()` runs it, so the server is not blocked during the delays.
 - The current mode is remembered by the ESP. It is not read from the ventilation unit, which sends nothing back.
 
@@ -204,26 +205,29 @@ How the firmware works (`src/main.cpp`):
 - VS Code with the PlatformIO extension, or PlatformIO Core on the command line.
 - A USB cable to flash the ESP.
 
-### 2. Wi‑Fi credentials
+### 2. Optional settings (`include/wifi.h`)
 
-Copy the template `include/wifi.h.example` to `include/wifi.h`, which is excluded from Git:
+The Wi‑Fi network is chosen after flashing, from a setup portal (step 5), so no password needs to be compiled into the firmware. The file `include/wifi.h` is optional. It is still needed for updates over Wi‑Fi, and it can hold a fallback network. Copy the template, which is excluded from Git once copied:
 
 ```bash
 cp include/wifi.h.example include/wifi.h
 ```
 
-Then put your network name and password in the copy, and choose a password for updates over Wi‑Fi:
+Then edit the copy:
 
 ```cpp
 #pragma once
 
-const char *ssid = "NETWORK_NAME";
-const char *password = "PASSWORD";
-
 #define OTA_PASSWORD "OTA_PASSWORD"
+
+#define WIFI_SSID "NETWORK_NAME"
+#define WIFI_PASSWORD "PASSWORD"
 ```
 
-Without the `OTA_PASSWORD` line, the firmware still builds (with a warning) but only accepts updates over USB.
+- Without the `OTA_PASSWORD` line, the firmware still builds (with a warning) but only accepts updates over USB.
+- `WIFI_SSID` and `WIFI_PASSWORD` are only tried when no network is saved on the ESP yet (new board or erased flash). A network chosen in the portal always wins. Remove these two lines to use the portal only.
+
+> **Coming from an older version**: the old `const char *ssid` and `password` lines are no longer read. The ESP keeps the network it was already using (the Wi‑Fi chip saves it in flash), so nothing has to change. To keep a fallback, rename them to `WIFI_SSID` and `WIFI_PASSWORD` as above.
 
 ### 3. Build and flash the firmware
 
@@ -239,13 +243,23 @@ pio run --target uploadfs
 
 Repeat this step every time a file in the `data/` folder changes.
 
-### 5. Check
+### 5. Connect to Wi‑Fi
+
+When the ESP has no network saved, or cannot reach it within 30 seconds, it opens its own Wi‑Fi access point named **`VMC-Setup`** (no password):
+
+1. Connect a phone or a computer to `VMC-Setup`. The setup page usually opens by itself; if not, open `http://192.168.4.1/`.
+2. Choose **Configure WiFi**, pick your network in the list and enter its password, then save.
+3. The ESP joins the network, saves it in flash and closes the access point. The next boots connect directly.
+
+The portal stays open 3 minutes. Meanwhile, the ESP keeps retrying the saved network every few seconds: after a power cut, when the router takes longer to start than the ESP, it connects as soon as the router is back. If nobody uses the portal, it closes and the ESP keeps retrying the saved network in the background. The ventilation commands only start once the portal has closed. To pick another network later, change it while the old one is unreachable, or erase the flash (`pio run --target erase`, then flash again).
+
+Check with the serial monitor:
 
 ```bash
 pio device monitor
 ```
 
-The serial monitor (115200 baud) shows the list of LittleFS files, then the IP address obtained. The page is then available at `http://vmc/` (if your router resolves hostnames) or `http://<ip-address>/`. It is a good idea to reserve a fixed IP address for the ESP in the router, especially for Home Assistant.
+The serial monitor (115200 baud) shows the list of LittleFS files, the Wi‑Fi manager messages (`*WM:`), then the IP address obtained. The page is then available at `http://vmc/` (if your router resolves hostnames) or `http://<ip-address>/`. It is a good idea to reserve a fixed IP address for the ESP in the router, especially for Home Assistant.
 
 ### 6. Updates over Wi‑Fi (OTA)
 
@@ -276,6 +290,7 @@ pio test -e native
 - that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
 - that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
 - that pages are served from LittleFS and that an unknown URL answers `404`.
+- that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that the `wifi.h` fallback network is only used when nothing is saved, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
 The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for both ESP boards (production and test).
@@ -399,7 +414,8 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 | Symptom | What to check |
 |---|---|
 | The page at `http://vmc/` does not open | Try `http://<ip-address>/` with the address from the serial monitor: some routers do not resolve the `vmc` hostname. |
-| `Connection established` never shows | The Wi‑Fi network or password has changed (new Internet box, for example). Update `include/wifi.h`, then build and flash again. |
+| `Connection established` never shows | The Wi‑Fi network or password has changed (new Internet box, for example). Restart the ESP: it cannot reach the old network, so it opens the `VMC-Setup` portal for 3 minutes, see [Connect to Wi‑Fi](#5-connect-to-wifi). |
+| The `VMC-Setup` access point does not show | The ESP reached its saved network, or the 3 minutes are over: restart it. To force the portal while the old network still works, erase the flash (`pio run --target erase`) and flash again. |
 | The page is blank or returns an error, but `/mode` answers | The LittleFS file list is empty in the serial monitor: upload the interface with `pio run --target uploadfs`. |
 | The ESP does not start after a wiring change | Check GPIO2 (must be HIGH at boot) and GPIO15 (must be LOW at boot), see [Wiring](#wiring). |
 | The ESP LED (GPIO16) lights up during a command, but the ventilation unit does not react | Check the FFC cable and breakout, and the 3 V power to the remote's battery holder. If the remote board is powered and connected, it may no longer be paired (after replacing or resetting the unit, for example): pair it again, see [How the ventilation unit works](#how-the-ventilation-unit-works). |
@@ -413,6 +429,7 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 - **Max ignored in High**: Max commands are silently ignored if the current mode is High.
 - **Requests close together**: only one command is stored at a time, and it is cleared once it has run. A command received while another one is being sent (up to about 3 seconds for Max 60 min) can therefore be lost.
 - **Updates over Wi‑Fi**: protected by a password, but sent unencrypted over the local network.
+- **Setup portal**: the `VMC-Setup` access point has no password. It only opens when the ESP cannot reach its network, for 3 minutes after a boot. There is no button yet to reopen it or to forget the network (see the factory reset idea in the [roadmap](ROADMAP.md)).
 
 ## Ideas for improvement
 

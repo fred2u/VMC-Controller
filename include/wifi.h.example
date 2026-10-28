@@ -1,14 +1,18 @@
-// Wi-Fi credentials and OTA password used by src/main.cpp.
+// Optional settings used by src/main.cpp.
 //
-// Copy this file to include/wifi.h (which is excluded from Git)
-// and put your own network name and password in the copy:
+// The Wi-Fi network is chosen from the "VMC-Setup" portal (see the README),
+// so this file is not required. Copy it to include/wifi.h (which is
+// excluded from Git) to set an OTA password or a fallback network:
 //
 //   cp include/wifi.h.example include/wifi.h
 #pragma once
 
-const char *ssid = "NETWORK_NAME";
-const char *password = "PASSWORD";
-
 // Password asked for updates over Wi-Fi (OTA). Remove this line to
 // disable OTA: the firmware then only accepts updates over USB.
 #define OTA_PASSWORD "OTA_PASSWORD"
+
+// Optional fallback network, only tried when no network is saved on the
+// ESP yet (new board or erased flash). Remove these lines to use the
+// portal only. A network chosen in the portal always wins.
+#define WIFI_SSID "NETWORK_NAME"
+#define WIFI_PASSWORD "PASSWORD"
