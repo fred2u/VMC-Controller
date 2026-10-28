@@ -49,6 +49,8 @@ function getInfo() {
         fill("rssi", info.rssi ? info.rssi + " dBm" : "");
         fill("ip", info.ip);
         fill("hostname", info.hostname);
+        $("update").hidden = !info.update;
+        $("update-off").hidden = !!info.update;
     });
 }
 
@@ -65,7 +67,33 @@ function post(button) {
     });
 }
 
+// Sends the chosen .bin file to /update/firmware or /update/web.
+function update(event) {
+    event.preventDefault();
+    var file = $("update-file").files[0];
+    if (!file) { notice("Choose a .bin file first"); return; }
+    var kind = $("update-kind").value;
+    if (!confirm("Update the " + (kind == "web" ? "web interface" : "firmware") + " with " + file.name + "?")) return;
+    var data = new FormData();
+    data.append("file", file, file.name);
+    var xhttp = new XMLHttpRequest();
+    var bar = $("update-progress");
+    bar.hidden = false;
+    xhttp.upload.onprogress = function(e) {
+        if (e.lengthComputable) bar.value = Math.round(e.loaded * 100 / e.total);
+    };
+    xhttp.onload = function() {
+        bar.hidden = true;
+        notice(this.status == 200 ? this.responseText + "…" : this.responseText || "Update failed (" + this.status + ")");
+    };
+    xhttp.onerror = function() { bar.hidden = true; notice("Update failed (no answer)"); };
+    xhttp.open("POST", "update/" + kind, true);
+    xhttp.send(data);
+    notice("Sending " + file.name + "…");
+}
+
 document.addEventListener("DOMContentLoaded", function() {
+    $("update").addEventListener("submit", update);
     var list = document.querySelectorAll("button[data-post]");
     for (var i = 0; i < list.length; i++) {
         list[i].addEventListener("click", function() { post(this); });

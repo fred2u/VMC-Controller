@@ -194,3 +194,19 @@ footer a, .back { color: var(--accent); text-decoration: none; font-weight: 600;
 .facts dd { margin: 0; font-weight: 600; word-break: break-all; }
 button.danger { color: var(--bad); }
 .notice { min-height: 1.4em; text-align: center; font-weight: 600; color: var(--accent); }
+
+#update .grid { margin-bottom: 12px; }
+#update button { width: 100%; }
+select, input[type=file] {
+    min-height: 44px;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--text);
+    font: inherit;
+    font-size: 0.85rem;
+}
+progress { width: 100%; margin-top: 12px; accent-color: var(--accent); }
+[hidden] { display: none !important; }

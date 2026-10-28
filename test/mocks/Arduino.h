@@ -40,10 +40,12 @@ class FakeESP
 public:
   void restart() { restartCount++; }
   uint32_t getFreeHeap() { return freeHeap; }
+  uint32_t getFreeSketchSpace() { return freeSketchSpace; }
   String getResetReason() { return resetReason; }
 
   int restartCount = 0;
   uint32_t freeHeap = 31000;
+  uint32_t freeSketchSpace = 0x80000 + 0x1234;
   String resetReason = "Power On";
 };
 extern FakeESP ESP;
@@ -66,6 +68,7 @@ public:
   void println(const char *) {}
   void println(const String &) {}
   void println(const IPAddress &) {}
+  void print(const String &) {}
   void print(const char *) {}
 };
 extern FakeSerial Serial;

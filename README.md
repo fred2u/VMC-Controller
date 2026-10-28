@@ -184,7 +184,7 @@ Layout:
 ├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
 ├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
 ├── scripts/
-│   ├── ota_password.py  Reads the OTA password from VMC_OTA_PASSWORD
+│   ├── passwords.py     Reads the passwords from VMC_OTA_PASSWORD, VMC_HTTP_PASSWORD, VMC_SETUP_PASSWORD
 │   ├── ota_auth.py      Gives that password to uploads over Wi‑Fi
 │   └── version.py       Builds the version from the Git tags into the firmware
 └── data/                Files uploaded to LittleFS
@@ -210,19 +210,33 @@ How the firmware works (`src/main.cpp`):
 
 The `pio` commands below go in a **PlatformIO terminal**: in VS Code, open the PlatformIO sidebar, then *Quick Access > Miscellaneous > New Terminal*. A plain PowerShell or terminal window usually does not find `pio`, because the extension does not add it to the PATH. The commands are given for bash (Linux, macOS) and PowerShell (Windows), where they differ.
 
-### 2. OTA password
+### 2. Passwords
 
-No password is stored in the project: the Wi‑Fi network is chosen after flashing, from a setup portal (step 5), and the password for updates over Wi‑Fi comes from the `VMC_OTA_PASSWORD` environment variable, read at build time by `scripts/ota_password.py`. Set it in the terminal before building:
+No password is stored in the project: the Wi‑Fi network is chosen after flashing, from a setup portal (step 5), and the passwords come from environment variables, read at build time by `scripts/passwords.py`:
+
+| Variable | Protects | Without it |
+|---|---|---|
+| `VMC_OTA_PASSWORD` | Updates over Wi‑Fi with PlatformIO (step 6) | Updates over USB only |
+| `VMC_HTTP_PASSWORD` | The web interface and every HTTP route (user `admin`), and turns on the web update page | Open to anyone on the local network, no web update page |
+| `VMC_SETUP_PASSWORD` | The `VMC-Setup` access point (at least 8 characters) | Open access point |
+
+Only `VMC_OTA_PASSWORD` is recommended for everyone; the other two are optional. Set them in the terminal before building:
 
 ```bash
 export VMC_OTA_PASSWORD="choose-a-password"
+export VMC_HTTP_PASSWORD="another-password"     # optional
+export VMC_SETUP_PASSWORD="setup-password"      # optional, 8 characters or more
 ```
 
 ```powershell
 $env:VMC_OTA_PASSWORD = "choose-a-password"
+$env:VMC_HTTP_PASSWORD = "another-password"     # optional
+$env:VMC_SETUP_PASSWORD = "setup-password"      # optional, 8 characters or more
 ```
 
-The variable only lasts as long as the terminal: set it again in each new terminal. On Windows, to keep it for good, run `setx VMC_OTA_PASSWORD "choose-a-password"` once, then open a new terminal (and restart VS Code so that its terminals see it).
+The variables only last as long as the terminal: set them again in each new terminal. On Windows, to keep one for good, run `setx VMC_OTA_PASSWORD "choose-a-password"` once, then open a new terminal (and restart VS Code so that its terminals see it).
+
+With `VMC_HTTP_PASSWORD`, the browser asks for the user `admin` and the password the first time; Home Assistant needs them too (see [Home Assistant integration](#home-assistant-integration)).
 
 Without this variable, the firmware still builds (with a warning) but only accepts updates over USB. Use the same password for every build: the ESP asks for the one it was built with.
 
@@ -290,6 +304,10 @@ The computer must be on the same network, and its firewall must let the ESP conn
 
 The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 11 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
 
+#### From the web page, without PlatformIO
+
+With `VMC_HTTP_PASSWORD` (step 2), the Maintenance page also has an **Update** section: choose **Firmware** and `.pio/build/espmxdevkit/firmware.bin`, or **Web interface** and `.pio/build/espmxdevkit/littlefs.bin` (made by `pio run --target buildfs`), then tap **Update**. The ESP restarts when it is done. Without a password, this page is not built in, since anyone on the network could replace the firmware.
+
 > **Coming from v1.0**: the flash layout of the production board changed (LittleFS moved). Flash it once over USB, firmware **and** web interface (`upload` then `uploadfs`); the next updates can go over Wi‑Fi.
 
 ## Tests
@@ -312,6 +330,7 @@ The tests are built by the computer's own C++ compiler, not the ESP one. Linux a
 - that `/pair` holds `1` and `Auto` together for 5 s and `/reset-remote` holds `Default` and `Timer` for 4 s, without changing the mode, that they and `/restart` and `/forget-wifi` only answer `POST`, that a restart waits for the answer and never cuts a press short, and that the uptime survives the `millis()` wraparound;
 - that pages are served from LittleFS, that `/version` answers the built-in version, that `/info` answers the version, name, IP address and Wi‑Fi signal as JSON, and that an unknown URL answers `404`;
 - that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
+- that with a password every route answers `401` without it or with a wrong one, that the `VMC-Setup` access point gets its password, and that the web update writes the firmware or the web interface (unmounting LittleFS first), refuses a request without the password, answers `500` on a failed update, then restarts;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
 The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for both ESP boards (production and test).
@@ -416,7 +435,7 @@ The "Max" modes match the remote's Timer button, pressed 1, 2 or 3 times. They a
 
 ## HTTP API
 
-The routes are on port 80. The mode buttons and the information routes answer `GET` (as `rest_command` sends by default). The maintenance actions only answer `POST`, so that opening their link by mistake does nothing (`GET` answers `404`).
+The routes are on port 80. With `VMC_HTTP_PASSWORD`, every route asks for the user `admin` and that password (HTTP Basic or Digest), and answers `401` without them: `curl -u admin:password http://vmc/low`. The mode buttons and the information routes answer `GET` (as `rest_command` sends by default). The maintenance actions only answer `POST`, so that opening their link by mistake does nothing (`GET` answers `404`).
 
 | Route | Response | Purpose |
 |---|---|---|
@@ -435,6 +454,7 @@ The routes are on port 80. The mode buttons and the information routes answer `G
 | `/restart` | `POST`, `200` | Restarts the ESP about a second later |
 | `/forget-wifi` | `POST`, `200` | Erases the saved Wi‑Fi network, then restarts in setup mode (`VMC-Setup`) |
 | `/maintenance` | HTML page | Maintenance page |
+| `/update/firmware`, `/update/web` | `POST` (file upload), `200` or `500` | Web update of the firmware or of the web interface, then restart. Only with `VMC_HTTP_PASSWORD` |
 | `/version` | `text/plain` | Firmware version, for example `v1.1` (see [Releases](#releases)) |
 | `/info` | `application/json` | Board details: `{"version":"v1.2","hostname":"vmc","ip":"192.168.1.42","rssi":-61,"ssid":"home","uptime":3600,"heap":31000,"reset":"Power On"}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak; `uptime` is in seconds since the last start, `heap` the free memory in bytes, `reset` the reason of the last start) |
 
@@ -471,7 +491,7 @@ sensor:
     scan_interval: 30
 ```
 
-Replace `vmc` with the ESP's IP address if your network does not resolve the hostname. The commands can then be called from dashboard buttons or automations, for example "Max 30 min" when the bathroom humidity goes above a threshold.
+Replace `vmc` with the ESP's IP address if your network does not resolve the hostname. With `VMC_HTTP_PASSWORD`, add the user and password to each command and to the sensor, for example `vmc_low: { url: "http://vmc/low", username: admin, password: !secret vmc_password }`, and `username`/`password` under the `rest` sensor. The commands can then be called from dashboard buttons or automations, for example "Max 30 min" when the bathroom humidity goes above a threshold.
 
 ## How the ventilation unit works
 
@@ -501,11 +521,11 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 
 ## Known limitations
 
-- **No authentication**: anyone on the local network can control the ventilation unit.
+- **Optional authentication**: without `VMC_HTTP_PASSWORD`, anyone on the local network can control the ventilation unit. With it, the password is checked but the traffic is plain HTTP (no encryption).
 - **Estimated mode**: the mode shown is the one from the last command sent by the ESP. A command sent by another remote, a return to auto mode after a power cut, or a timer ending on the unit side are not seen by the ESP.
 - **Max mode duration**: the ESP counts the Max duration from the moment it sends the command, with `millis()`. The unit has its own timer, so the two can drift by a few seconds.
 - **Updates over Wi‑Fi**: protected by a password, but sent unencrypted over the local network.
-- **Setup portal**: the `VMC-Setup` access point has no password. It only opens when the ESP cannot reach its network, for 3 minutes after a boot. To choose another network, use **Forget Wi‑Fi** on the Maintenance page. If the ESP can no longer be reached at all, a hardware button is still missing (see the factory reset idea in the [roadmap](ROADMAP.md)).
+- **Setup portal**: the `VMC-Setup` access point has no password unless `VMC_SETUP_PASSWORD` is set. It only opens when the ESP cannot reach its network, for 3 minutes after a boot. To choose another network, use **Forget Wi‑Fi** on the Maintenance page. If the ESP can no longer be reached at all, a hardware button is still missing (see the factory reset idea in the [roadmap](ROADMAP.md)).
 
 ## Ideas for improvement
 

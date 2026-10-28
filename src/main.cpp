@@ -3,13 +3,29 @@
 #include <ESPAsyncWebServer.h>
 #include <ESPAsyncWiFiManager.h>
 #include "LittleFS.h"
+#include <Updater.h>
+#include <flash_hal.h>
 
 // The Wi-Fi network is picked from the setup portal. Updates over Wi-Fi
 // need OTA_PASSWORD, set from the VMC_OTA_PASSWORD environment variable
-// at build time by scripts/ota_password.py.
+// at build time by scripts/passwords.py.
 #ifndef OTA_PASSWORD
 #warning "VMC_OTA_PASSWORD is not set: updates over Wi-Fi are disabled"
 #endif
+
+// Optional password for the web interface and the HTTP routes, from the
+// VMC_HTTP_PASSWORD environment variable at build time (scripts/passwords.py).
+// The user name is always "admin". Without it, the routes are open, as on a
+// trusted home network, and the web update page (/update) is disabled.
+#define HTTP_USER "admin"
+#ifdef HTTP_PASSWORD
+const bool web_update = true;
+#else
+const bool web_update = false;
+#endif
+
+// Optional password for the VMC-Setup access point (VMC_SETUP_PASSWORD, at
+// least 8 characters). Without it, the access point is open.
 
 // Name on the network (DHCP, http://vmc/, OTA as vmc.local). The test
 // board is built with another name (see platformio.ini) so that it can sit
@@ -97,6 +113,10 @@ void handleInfo(AsyncWebServerRequest *request);
 void handleMaintenance(AsyncWebServerRequest *request);
 void handleRestart(AsyncWebServerRequest *request);
 void handleForgetWiFi(AsyncWebServerRequest *request);
+void handleUpdateDone(AsyncWebServerRequest *request);
+void handleUpdateUpload(AsyncWebServerRequest *request, const String &filename,
+                        size_t index, uint8_t *data, size_t len, bool final);
+bool allowed(AsyncWebServerRequest *request);
 
 int requestCommand(int8_t command);
 void runSender();
@@ -208,6 +228,10 @@ void setup()
   webServer.on("/info", handleInfo);
   webServer.on("/restart", HTTP_POST, handleRestart);
   webServer.on("/forget-wifi", HTTP_POST, handleForgetWiFi);
+#ifdef HTTP_PASSWORD
+  webServer.on("/update/firmware", HTTP_POST, handleUpdateDone, handleUpdateUpload);
+  webServer.on("/update/web", HTTP_POST, handleUpdateDone, handleUpdateUpload);
+#endif
   webServer.onNotFound(handleNotFound);
   webServer.begin();
 
@@ -347,7 +371,12 @@ void setupWiFi()
   AsyncWiFiManager wifiManager(&webServer, &dnsServer);
   wifiManager.setConnectTimeout(wifi_connect_timeout);
   wifiManager.setConfigPortalTimeout(setup_portal_timeout);
-  if(!wifiManager.autoConnect(setup_ap_name))
+#ifdef SETUP_PASSWORD
+  bool connected = wifiManager.autoConnect(setup_ap_name, SETUP_PASSWORD);
+#else
+  bool connected = wifiManager.autoConnect(setup_ap_name);
+#endif
+  if(!connected)
   {
     Serial.println("No Wi-Fi network, retrying in the background");
     WiFi.mode(WIFI_STA);
@@ -365,6 +394,10 @@ void onStationModeGotIP(const WiFiEventStationModeGotIP& event)
 
 void handleDefault(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   request->send(LittleFS, "/index.html", "text/html");
 }
 
@@ -376,11 +409,19 @@ void handleNotFound(AsyncWebServerRequest *request)
 
 void handleJS(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   request->send(LittleFS, request->url(), "text/javascript");
 }
 
 void handleCSS(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   request->send(LittleFS, request->url(), "text/css");
 }
 
@@ -388,6 +429,10 @@ void handleCSS(AsyncWebServerRequest *request)
 // Pairing and remote reset answer what they do ("Pairing", "Remote reset").
 void handleCommand(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   String url = request->url();
   for(int8_t i = 0; i < command_count; i++)
   {
@@ -409,23 +454,36 @@ void handleCommand(AsyncWebServerRequest *request)
 
 void handleMode(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   int8_t mode = maxMode != no_command ? maxMode : currentMode;
   request->send(200, "text/plain", mode == no_command ? "" : commands[mode].mode);
 }
 
 void handleVersion(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   request->send(200, "text/plain", VMC_VERSION);
 }
 
 // Board details for the web pages, as JSON:
 // {"version":"v1.2","hostname":"vmc","ip":"192.168.1.42","rssi":-61,
-//  "ssid":"home","uptime":3600,"heap":31000,"reset":"Power On"}
+//  "ssid":"home","uptime":3600,"heap":31000,"reset":"Power On","update":true}
 // rssi is the Wi-Fi signal in dBm (-50 is very good, -80 is weak), uptime
 // the seconds since boot, heap the free memory in bytes, reset the reason
-// of the last start given by the ESP.
+// of the last start given by the ESP, update whether the web update page
+// is built in (only with a password).
 void handleInfo(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   String json = String("{\"version\":\"") + VMC_VERSION +
                 "\",\"hostname\":\"" + VMC_HOSTNAME +
                 "\",\"ip\":\"" + WiFi.localIP().toString() +
@@ -433,17 +491,26 @@ void handleInfo(AsyncWebServerRequest *request)
                 ",\"ssid\":\"" + WiFi.SSID() +
                 "\",\"uptime\":" + String((unsigned long)(uptime / 1000)) +
                 ",\"heap\":" + String((unsigned long)ESP.getFreeHeap()) +
-                ",\"reset\":\"" + ESP.getResetReason() + "\"}";
+                ",\"reset\":\"" + ESP.getResetReason() +
+                "\",\"update\":" + (web_update ? "true" : "false") + "}";
   request->send(200, "application/json", json);
 }
 
 void handleMaintenance(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   request->send(LittleFS, "/maintenance.html", "text/html");
 }
 
 void handleRestart(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   restartRequest = RESTART_ONLY;
   restartRequestedAt = millis();
   request->send(200, "text/plain", "Restarting");
@@ -453,10 +520,96 @@ void handleRestart(AsyncWebServerRequest *request)
 // VMC-Setup access point, see setupWiFi().
 void handleForgetWiFi(AsyncWebServerRequest *request)
 {
+  if(!allowed(request))
+  {
+    return;
+  }
   restartRequest = RESTART_FORGET_WIFI;
   restartRequestedAt = millis();
   request->send(200, "text/plain", "Wi-Fi network forgotten, restarting");
 }
+
+// With a password (VMC_HTTP_PASSWORD), answers 401 and asks the browser
+// for it when the request does not carry it. Basic and Digest both work
+// (Home Assistant's rest_command sends Basic with username and password).
+bool allowed(AsyncWebServerRequest *request)
+{
+#ifdef HTTP_PASSWORD
+  if(!request->authenticate(HTTP_USER, HTTP_PASSWORD))
+  {
+    request->requestAuthentication();
+    return false;
+  }
+#endif
+  return true;
+}
+
+#ifdef HTTP_PASSWORD
+// Web update (/update/firmware and /update/web), only built with a password.
+// The file arrives in pieces; the first one starts the update, the last one
+// checks it. handleUpdateDone answers once the whole file is in, then the
+// ESP restarts on the new firmware or web interface.
+bool updateRefused = false;
+
+void handleUpdateUpload(AsyncWebServerRequest *request, const String &filename,
+                        size_t index, uint8_t *data, size_t len, bool final)
+{
+  if(index == 0)
+  {
+    updateRefused = !request->authenticate(HTTP_USER, HTTP_PASSWORD);
+    if(updateRefused)
+    {
+      return;
+    }
+    bool web = request->url() == "/update/web";
+    Serial.println(web ? "Web interface update" : "Firmware update");
+    Update.runAsync(true);
+    bool started;
+    if(web)
+    {
+      // The web interface image replaces the file system: unmount it first.
+      LittleFS.end();
+      started = Update.begin(FS_PHYS_SIZE, U_FS);
+    }
+    else
+    {
+      started = Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000, U_FLASH);
+    }
+    if(!started)
+    {
+      Update.printError(Serial);
+    }
+  }
+  if(updateRefused || Update.hasError())
+  {
+    return;
+  }
+  if(Update.write(data, len) != len)
+  {
+    Update.printError(Serial);
+  }
+  if(final && !Update.end(true))
+  {
+    Update.printError(Serial);
+  }
+}
+
+void handleUpdateDone(AsyncWebServerRequest *request)
+{
+  if(!allowed(request))
+  {
+    return;
+  }
+  if(updateRefused || Update.hasError() || !Update.isFinished())
+  {
+    request->send(500, "text/plain", "Update failed: " + Update.getErrorString());
+    return;
+  }
+  request->send(200, "text/plain", "Update done, restarting");
+  restartRequest = RESTART_ONLY;
+  restartRequestedAt = millis();
+}
+#endif
 
 void handleRestartRequest()
 {
