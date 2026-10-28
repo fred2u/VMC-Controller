@@ -14,14 +14,15 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 2. [Matériel](#matériel)
 3. [Câblage](#câblage)
 4. [Photos de la télécommande](#photos-de-la-télécommande)
-5. [Logiciel](#logiciel)
-6. [Installation](#installation)
-7. [Utilisation](#utilisation)
-8. [API HTTP](#api-http)
-9. [Intégration Home Assistant](#intégration-home-assistant)
-10. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
-11. [Limites connues](#limites-connues)
-12. [Pistes d'amélioration](#pistes-damélioration)
+5. [Montage final](#montage-final)
+6. [Logiciel](#logiciel)
+7. [Installation](#installation)
+8. [Utilisation](#utilisation)
+9. [API HTTP](#api-http)
+10. [Intégration Home Assistant](#intégration-home-assistant)
+11. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
+12. [Limites connues](#limites-connues)
+13. [Pistes d'amélioration](#pistes-damélioration)
 
 ---
 
@@ -58,7 +59,7 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 
 ## Câblage
 
-Le clavier d'origine est une membrane souple avec une nappe qui s'enfiche sur un connecteur de la carte de la télécommande (voir les [photos](#photos-de-la-télécommande)). La membrane est retirée et remplacée par une nappe FFC reliée à l'ESP par un adaptateur, ce qui évite de souder sur la carte Orcon.
+Le clavier d'origine est une membrane souple avec une nappe qui s'enfiche sur un connecteur de la carte de la télécommande (voir les [photos](#photos-de-la-télécommande) et le [montage final](#montage-final)). La membrane est retirée et remplacée par une nappe FFC reliée à l'ESP par un adaptateur, ce qui évite de souder sur la carte Orcon.
 
 Chaque sortie de l'ESP est reliée à l'un des 6 contacts de boutons du connecteur clavier. Au repos, les sorties sont à l'état haut. Un appui correspond à un état bas de 500 ms.
 
@@ -97,6 +98,15 @@ Télécommande Orcon 15RF démontée, avant modification. Les photos sont dans [
 | Connecteur de la nappe clavier (à gauche) | Détail du microcontrôleur |
 | ![Dos de la carte](docs/photos/09-carte-dos.jpg) | ![Composants du montage](docs/photos/10-composants-esp-nappes.jpg) |
 | Dos de la carte, pastilles de contact | Composants du montage : cartes NodeMCU, nappes FFC, adaptateur FFC 8 broches |
+
+## Montage final
+
+| | |
+|---|---|
+| ![Montage ouvert](docs/photos/11-montage-ouvert.jpg) | ![Montage dans le boîtier](docs/photos/12-montage-dans-boitier.jpg) |
+| Carte de la télécommande et NodeMCU sur leur support imprimé. La nappe FFC relie le connecteur clavier à l'adaptateur FFC 8 broches, et les fils rouge et noir amènent le 3 V de l'ESP sur le support de pile, via un connecteur débrochable. | NodeMCU et adaptateur FFC dans le boîtier, prise micro‑USB accessible sur le côté. |
+| ![Boîtier fermé](docs/photos/13-boitier-ferme.jpg) | |
+| Boîtier imprimé en 3D, fermé et alimenté par USB. La LED est visible à travers le plastique. | |
 
 ## Logiciel
 
@@ -258,4 +268,4 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 - Intégration Home Assistant native, par MQTT avec découverte automatique, à la place de la configuration REST manuelle.
 - Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
 - Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
-- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP), une photo du montage final et un schéma de câblage.
+- Ajouter au dépôt les fichiers du boîtier imprimé en 3D (STL ou STEP), et un schéma de câblage.
