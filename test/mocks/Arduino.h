@@ -26,6 +26,11 @@ public:
   bool operator==(const char *o) const { return value == o; }
   bool operator!=(const char *o) const { return value != o; }
   String operator+(const String &o) const { return String(value + o.value); }
+  String &operator+=(char c)
+  {
+    value += c;
+    return *this;
+  }
 
   std::string value;
 };

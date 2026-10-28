@@ -64,6 +64,10 @@ unsigned long millis() { return (uint32_t)fake::nowMillis; }
 // VMC_SETUP_PASSWORD.
 #define HTTP_PASSWORD "test-http-password"
 #define SETUP_PASSWORD "test-setup-password"
+// On the ESP, scripts/passwords.py sets these from VMC_MQTT_*.
+#define MQTT_HOST "broker.test"
+#define MQTT_USER "mqtt-user"
+#define MQTT_PASSWORD "mqtt-password"
 // On the ESP, scripts/version.py sets this from the Git tags.
 #define VMC_VERSION "v9.9-test"
 #include "../../src/main.cpp"
@@ -92,6 +96,11 @@ static void boot(const char *savedSsid = "", bool wifiConnects = true)
   otaStarted = false;
   ArduinoOTA.reset();
   Update.reset();
+  mqtt = PubSubClient(mqttWiFi);
+  mqttSetUp = false;
+  mqttTried = false;
+  mqttLastTry = 0;
+  mqttPublishedMode = -2;
   updateRefused = false;
   // Every request carries the right password, unless a test changes it.
   fakeAuthUser = "admin";
@@ -767,6 +776,126 @@ void test_update_needs_post()
   TEST_ASSERT_EQUAL(404, webServer.request("/update/firmware").status);
 }
 
+// ----- MQTT and Home Assistant discovery ----------------------------------
+
+static void connectMQTT()
+{
+  WiFi.statusValue = WL_CONNECTED;
+  loop();
+}
+
+void test_mqtt_waits_for_wifi()
+{
+  loop();
+  TEST_ASSERT_EQUAL(0, mqtt.connectCount);
+}
+
+void test_mqtt_connects_with_credentials_and_last_will()
+{
+  connectMQTT();
+  TEST_ASSERT_EQUAL(1, mqtt.connectCount);
+  TEST_ASSERT_EQUAL_STRING("broker.test", mqtt.host.c_str());
+  TEST_ASSERT_EQUAL(1883, mqtt.port);
+  TEST_ASSERT_EQUAL_STRING("vmc", mqtt.clientId.c_str());
+  TEST_ASSERT_EQUAL_STRING("mqtt-user", mqtt.user.c_str());
+  TEST_ASSERT_EQUAL_STRING("mqtt-password", mqtt.password.c_str());
+  TEST_ASSERT_EQUAL_STRING("vmc/status", mqtt.will.c_str());
+  TEST_ASSERT_EQUAL_STRING("offline", mqtt.willPayload.c_str());
+  TEST_ASSERT_TRUE(mqtt.willRetained);
+  TEST_ASSERT_EQUAL_STRING("online", mqtt.last("vmc/status").c_str());
+  TEST_ASSERT_EQUAL(1, (int)mqtt.subscriptions.size());
+  TEST_ASSERT_EQUAL_STRING("vmc/command", mqtt.subscriptions[0].c_str());
+}
+
+void test_mqtt_announces_buttons_and_mode_sensor_to_home_assistant()
+{
+  connectMQTT();
+  const char *buttons[] = {"default", "auto", "low", "medium", "high", "max1", "max2", "max3"};
+  for (const char *b : buttons)
+  {
+    std::string topic = std::string("homeassistant/button/vmc/") + b + "/config";
+    TEST_ASSERT_EQUAL_MESSAGE(1, mqtt.count(topic), topic.c_str());
+  }
+  TEST_ASSERT_EQUAL(0, mqtt.count("homeassistant/button/vmc/pair/config"));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"name\":\"Max 30 min\",\"unique_id\":\"vmc_max2\",\"command_topic\":\"vmc/command\","
+      "\"payload_press\":\"max2\",\"availability_topic\":\"vmc/status\",\"device\":"
+      "{\"identifiers\":[\"vmc\"],\"name\":\"vmc\",\"manufacturer\":\"Orcon\","
+      "\"model\":\"VMC Controller\",\"sw_version\":\"v9.9-test\"}}",
+      mqtt.last("homeassistant/button/vmc/max2/config").c_str());
+  TEST_ASSERT_EQUAL(1, mqtt.count("homeassistant/sensor/vmc/mode/config"));
+  for (const FakePublication &p : mqtt.published)
+    if (p.topic.rfind("homeassistant/", 0) == 0)
+      TEST_ASSERT_TRUE_MESSAGE(p.retained, p.topic.c_str());
+}
+
+void test_mqtt_publishes_the_mode_when_it_changes()
+{
+  connectMQTT();
+  TEST_ASSERT_EQUAL_STRING("Medium", mqtt.last("vmc/mode").c_str());
+  loop();
+  TEST_ASSERT_EQUAL(1, mqtt.count("vmc/mode"));
+  sendAndRun("/max1");
+  TEST_ASSERT_EQUAL_STRING("Max 15 min", mqtt.last("vmc/mode").c_str());
+  fake::nowMillis += 16 * 60000UL;
+  loop();
+  TEST_ASSERT_EQUAL_STRING("Medium", mqtt.last("vmc/mode").c_str());
+  TEST_ASSERT_EQUAL(3, mqtt.count("vmc/mode"));
+}
+
+void test_mqtt_command_presses_the_button()
+{
+  connectMQTT();
+  mqtt.deliver("vmc/command", "low");
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_LOW));
+  TEST_ASSERT_EQUAL_STRING("Low", mqtt.last("vmc/mode").c_str());
+}
+
+void test_mqtt_ignores_unknown_and_maintenance_commands()
+{
+  connectMQTT();
+  mqtt.deliver("vmc/command", "turbo");
+  mqtt.deliver("vmc/command", "pair");
+  mqtt.deliver("vmc/command", "reset-remote");
+  runFor(8000);
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+}
+
+void test_mqtt_max_in_high_is_ignored()
+{
+  connectMQTT();
+  sendAndRun("/high");
+  fake::events.clear();
+  mqtt.deliver("vmc/command", "max1");
+  runFor(3000);
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+}
+
+void test_mqtt_retries_every_30_s_when_the_broker_is_down()
+{
+  mqtt.brokerUp = false;
+  connectMQTT();
+  TEST_ASSERT_EQUAL(1, mqtt.connectCount);
+  runFor(29000);
+  TEST_ASSERT_EQUAL(1, mqtt.connectCount);
+  runFor(1100);
+  TEST_ASSERT_EQUAL(2, mqtt.connectCount);
+  mqtt.brokerUp = true;
+  runFor(30100);
+  TEST_ASSERT_EQUAL(3, mqtt.connectCount);
+  TEST_ASSERT_TRUE(mqtt.connected());
+  TEST_ASSERT_EQUAL_STRING("Medium", mqtt.last("vmc/mode").c_str());
+}
+
+void test_mqtt_does_not_block_commands_while_the_broker_is_down()
+{
+  mqtt.brokerUp = false;
+  connectMQTT();
+  sendAndRun("/auto");
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_AUTO));
+}
+
 // ----- updates over Wi-Fi (OTA) -------------------------------------------
 
 void test_ota_waits_for_the_wifi_connection()
@@ -873,6 +1002,15 @@ int main(int, char **)
   RUN_TEST(test_update_without_the_password_writes_nothing);
   RUN_TEST(test_a_failed_update_answers_500_and_does_not_restart);
   RUN_TEST(test_update_needs_post);
+  RUN_TEST(test_mqtt_waits_for_wifi);
+  RUN_TEST(test_mqtt_connects_with_credentials_and_last_will);
+  RUN_TEST(test_mqtt_announces_buttons_and_mode_sensor_to_home_assistant);
+  RUN_TEST(test_mqtt_publishes_the_mode_when_it_changes);
+  RUN_TEST(test_mqtt_command_presses_the_button);
+  RUN_TEST(test_mqtt_ignores_unknown_and_maintenance_commands);
+  RUN_TEST(test_mqtt_max_in_high_is_ignored);
+  RUN_TEST(test_mqtt_retries_every_30_s_when_the_broker_is_down);
+  RUN_TEST(test_mqtt_does_not_block_commands_while_the_broker_is_down);
   RUN_TEST(test_ota_waits_for_the_wifi_connection);
   RUN_TEST(test_ota_starts_once_with_hostname_and_password_when_wifi_is_up);
   RUN_TEST(test_ota_is_handled_on_every_loop_even_without_a_command);
