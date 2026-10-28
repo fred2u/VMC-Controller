@@ -176,7 +176,7 @@ The Gerber files are in [`hardware/pcb/gerber/`](hardware/pcb/gerber/). They can
 | Wi‑Fi setup | [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager) (captive portal on the same async web server) |
 | Updates over Wi‑Fi | ArduinoOTA (included in the Arduino core) |
 | File system | LittleFS (web pages stored in flash) |
-| Interface | Plain HTML and JavaScript, [Milligram](https://milligram.io/) CSS |
+| Interface | Plain HTML, CSS and JavaScript, no framework (about 11 KB, light and dark themes) |
 
 Layout:
 
@@ -189,9 +189,8 @@ Layout:
 │   └── version.py       Builds the version from the Git tags into the firmware
 └── data/                Files uploaded to LittleFS
     ├── index.html       Remote control page
-    ├── script.js        Sends commands and refreshes the mode
-    ├── style.css        Layout
-    └── milligram.min.css
+    ├── script.js        Sends commands, refreshes the mode, shows the board details
+    └── style.css        Layout and light/dark themes
 ```
 
 How the firmware works (`src/main.cpp`):
@@ -287,7 +286,7 @@ With `VMC_OTA_PASSWORD` set, `scripts/ota_auth.py` gives the password to the upl
 
 The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port; on Windows, allow Python when the firewall asks).
 
-The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 28 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
+The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 11 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
 
 > **Coming from v1.0**: the flash layout of the production board changed (LittleFS moved). Flash it once over USB, firmware **and** web interface (`upload` then `uploadfs`); the next updates can go over Wi‑Fi.
 
@@ -307,7 +306,7 @@ The tests are built by the computer's own C++ compiler, not the ESP one. Linux a
 - that each URL presses the right button, with a 500 ms pulse and the LED on while sending;
 - that Max 15/30/60 min presses Timer 1, 2 or 3 times, 600 ms apart, then that `/mode` goes back to the previous mode when the time is up;
 - that Max commands are ignored in High mode (current behaviour, see [Known limitations](#known-limitations));
-- that pages are served from LittleFS, that `/version` answers the built-in version and that an unknown URL answers `404`;
+- that pages are served from LittleFS, that `/version` answers the built-in version, that `/info` answers the version, name, IP address and Wi‑Fi signal as JSON, and that an unknown URL answers `404`;
 - that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
@@ -348,7 +347,7 @@ None of these pins is used by the flash memory or the USB serial link, and the b
 
 ## Releases
 
-Each firmware knows its version, taken from the Git tags when it is built (`scripts/version.py`, which runs `git describe --tags --always --dirty`). The ESP prints it on the serial port at boot, answers it on `/version`, and the web interface shows it at the bottom of the page.
+Each firmware knows its version, taken from the Git tags when it is built (`scripts/version.py`, which runs `git describe --tags --always --dirty`). The ESP prints it on the serial port at boot, answers it on `/version` and `/info`, and the web interface shows it at the bottom of the page.
 
 | Version shown | Meaning |
 |---|---|
@@ -377,12 +376,17 @@ Numbers follow `vMAJOR.MINOR`: increase `MINOR` for a new feature or a fix, and 
 
 ## Usage
 
-| | |
-|---|---|
-| ![Interface on a smartphone, Medium mode](docs/screenshots/mobile-medium.png) | ![Interface on a smartphone, Max 30 min mode](docs/screenshots/mobile-max30.png) |
-| At boot, the ESP sends Medium | After pressing "Max 30 min" |
+| | | |
+|---|---|---|
+| ![Interface on a smartphone, Medium mode](docs/screenshots/mobile-medium.png) | ![Interface on a smartphone in dark theme, Max 30 min mode](docs/screenshots/mobile-max30-dark.png) | ![Interface on a smartphone, ESP unreachable](docs/screenshots/mobile-offline.png) |
+| At boot, the ESP sends Medium | After pressing "Max 30 min" (dark theme) | ESP unreachable |
 
-The page shows the last mode sent (refreshed every 2 seconds, matching button highlighted) and eight buttons:
+The page follows the phone's light or dark theme. It shows:
+
+- the last mode sent, refreshed every 2 seconds, with the matching button highlighted and a fan that turns faster with the speed;
+- an **Online** / **Offline** badge: after two refreshes without an answer (3 s each), the page says **Offline** and greys out the buttons, then comes back on its own;
+- the eight buttons below, grouped by Speed, Program and Max. The Max buttons are greyed out while in High, since the firmware ignores them there;
+- at the bottom, the firmware version, the IP address, the network name and the Wi‑Fi signal of the ESP (from `/info`).
 
 | Button | Effect on the ventilation unit |
 |---|---|
@@ -414,6 +418,7 @@ All routes are `GET`, on port 80.
 | `/max3` | empty `200` | High position for 60 min |
 | `/mode` | `text/plain` | Current mode: `Default`, `Auto`, `Low`, `Medium`, `High`, `Max 15 min`, `Max 30 min` or `Max 60 min` |
 | `/version` | `text/plain` | Firmware version, for example `v1.1` (see [Releases](#releases)) |
+| `/info` | `application/json` | Board details: `{"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak) |
 
 The `200` is sent as soon as the command is recorded, before it runs. Example:
 
@@ -421,6 +426,7 @@ The `200` is sent as soon as the command is recorded, before it runs. Example:
 curl http://vmc/high
 curl http://vmc/mode   # -> High
 curl http://vmc/version   # -> v1.1
+curl http://vmc/info      # -> {"version":"v1.1","hostname":"vmc","ip":"192.168.1.42","rssi":-61}
 ```
 
 ## Home Assistant integration
@@ -489,4 +495,4 @@ What the project is missing (pairing from the interface, reset button, Wi‑Fi s
 
 ## License
 
-This project (code, enclosure and PCB files) is released under the [MIT](LICENSE) license. The [Milligram](https://milligram.io/) stylesheet included in `data/` is also under the MIT license.
+This project (code, enclosure and PCB files) is released under the [MIT](LICENSE) license.
