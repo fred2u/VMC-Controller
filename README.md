@@ -15,29 +15,40 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 3. [Câblage](#câblage)
 4. [Photos de la télécommande](#photos-de-la-télécommande)
 5. [Montage final](#montage-final)
-6. [Logiciel](#logiciel)
-7. [Installation](#installation)
-8. [Utilisation](#utilisation)
-9. [API HTTP](#api-http)
-10. [Intégration Home Assistant](#intégration-home-assistant)
-11. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
-12. [Limites connues](#limites-connues)
-13. [Pistes d'amélioration](#pistes-damélioration)
+6. [Circuit imprimé](#circuit-imprimé)
+7. [Logiciel](#logiciel)
+8. [Installation](#installation)
+9. [Utilisation](#utilisation)
+10. [API HTTP](#api-http)
+11. [Intégration Home Assistant](#intégration-home-assistant)
+12. [Rappel du fonctionnement de la VMC](#rappel-du-fonctionnement-de-la-vmc)
+13. [Limites connues](#limites-connues)
+14. [Pistes d'amélioration](#pistes-damélioration)
+15. [Licence](#licence)
 
 ---
 
 ## Principe
 
-```
- Smartphone / Home Assistant
-            │  HTTP (Wi‑Fi local)
-            ▼
- ┌──────────────────────┐   GPIO (impulsions)  ┌─────────────────────────┐   RF    ┌────────────┐
- │ ESP8266              │ ───────────────────▶ │ Carte télécommande 15RF │ ──────▶ │ MVS‑15RH   │
- │ serveur web + LittleFS│   alimentation      │ (sans son clavier)      │         │ (VMC)      │
- └──────────────────────┘ ───────────────────▶ └─────────────────────────┘         └────────────┘
-            ▲
-            │ USB 5 V (chargeur)
+```mermaid
+flowchart LR
+    phone["📱 Smartphone<br/>navigateur web"]
+    ha["🏠 Home Assistant<br/>rest_command"]
+    usb["🔌 Chargeur USB 5 V"]
+
+    subgraph box["Boîtier imprimé en 3D"]
+        esp["ESP-Mx DevKit (ESP8285)<br/>serveur web + LittleFS"]
+        remote["Carte télécommande<br/>Orcon 15RF<br/>sans son clavier"]
+    end
+
+    vmc["🌀 VMC Orcon MVS-15RH"]
+
+    phone -- "HTTP, Wi-Fi local" --> esp
+    ha -- "HTTP, Wi-Fi local" --> esp
+    usb -- "5 V" --> esp
+    esp -- "6 GPIO via nappe FFC<br/>impulsions de 500 ms" --> remote
+    esp -. "3 V à la place de la pile" .-> remote
+    remote -- "radio RF" --> vmc
 ```
 
 - L'ESP8266 se connecte au Wi‑Fi de la maison et sert une petite page web.
@@ -52,7 +63,8 @@ La télécommande RF d'origine (Orcon 15RF) a été démontée : son clavier a �
 |---|---|
 | VMC | Orcon MVS‑15RH (ventilation simple flux, 4 positions + mode auto avec détecteur d'humidité) |
 | Télécommande | Orcon 15RF, démontée, clavier retiré |
-| Microcontrôleur | Carte de développement ESP8266 type NodeMCU v3 (ESP‑12), environnement PlatformIO `espmxdevkit` |
+| Microcontrôleur | Carte de développement DOIT ESP‑Mx DevKit (ESP8285, variante de l'ESP8266 avec mémoire flash intégrée), environnement PlatformIO `espmxdevkit` |
+| Circuit imprimé | PCB maison de 50 × 50 mm qui relie l'ESP à l'adaptateur FFC (voir [Circuit imprimé](#circuit-imprimé)) |
 | Liaison clavier | Nappe souple (FFC) et adaptateur FFC 8 broches au pas de 0,5 mm, à la place de la membrane du clavier |
 | Alimentation | Chargeur USB 5 V vers l'ESP, sortie 3 V de l'ESP vers la carte de la télécommande |
 | Boîtier | Imprimé en 3D |
@@ -63,17 +75,17 @@ Le clavier d'origine est une membrane souple avec une nappe qui s'enfiche sur un
 
 Chaque sortie de l'ESP est reliée à l'un des 6 contacts de boutons du connecteur clavier. Au repos, les sorties sont à l'état haut. Un appui correspond à un état bas de 500 ms.
 
-| Bouton télécommande | Fonction | Contact clavier | GPIO ESP8266 | Broche NodeMCU | Repère dans le code |
-|---|---|---|---|---|---|
-| 1 | Position basse | 1 | GPIO2 | D4 | `PIN_LOW` |
-| 2 | Position moyenne | 2 | GPIO15 | D8 | `PIN_MEDIUM` |
-| 3 | Position élevée | 3 | GPIO4 | D2 | `PIN_HIGH` |
-| Maison | Position défaut | 4 | GPIO12 | D6 | `PIN_DEFAULT` |
-| Auto | Mode automatique | 5 | GPIO5 | D1 | `PIN_AUTO` |
-| Timer (horloge) | Position élevée temporaire | 6 | GPIO14 | D5 | `PIN_MAX` |
-| LED d'activité | Allumée pendant l'envoi d'une commande | | GPIO16 | D0 (LED de la carte) | `PIN_LED` |
+| Bouton télécommande | Fonction | Contact clavier | GPIO ESP8266 | Repère dans le code |
+|---|---|---|---|---|
+| 1 | Position basse | 1 | GPIO2 | `PIN_LOW` |
+| 2 | Position moyenne | 2 | GPIO15 | `PIN_MEDIUM` |
+| 3 | Position élevée | 3 | GPIO4 | `PIN_HIGH` |
+| Maison | Position défaut | 4 | GPIO12 | `PIN_DEFAULT` |
+| Auto | Mode automatique | 5 | GPIO5 | `PIN_AUTO` |
+| Timer (horloge) | Position élevée temporaire | 6 | GPIO14 | `PIN_MAX` |
+| LED d'activité | Allumée pendant l'envoi d'une commande | | GPIO16 | `PIN_LED` |
 
-Les numéros de contact correspondent aux commentaires `// 1` à `// 6` du code, et aux 6 contacts de boutons du connecteur clavier de la télécommande.
+Les numéros de contact correspondent aux commentaires `// 1` à `// 6` du code, et aux 6 contacts de boutons du connecteur clavier de la télécommande. Sur l'ESP‑Mx DevKit et sur le PCB, les broches sont repérées directement par leur numéro de GPIO (par exemple `D15` ou `15` pour GPIO15).
 
 Alimentation :
 
@@ -97,14 +109,14 @@ Télécommande Orcon 15RF démontée, avant modification. Les photos sont dans [
 | ![Connecteur clavier](docs/photos/07-carte-connecteur-clavier.jpg) | ![Microcontrôleur](docs/photos/08-carte-microcontroleur.jpg) |
 | Connecteur de la nappe clavier (à gauche) | Détail du microcontrôleur |
 | ![Dos de la carte](docs/photos/09-carte-dos.jpg) | ![Composants du montage](docs/photos/10-composants-esp-nappes.jpg) |
-| Dos de la carte, pastilles de contact | Composants du montage : cartes NodeMCU, nappes FFC, adaptateur FFC 8 broches |
+| Dos de la carte, pastilles de contact | Composants du montage : cartes ESP, nappes FFC, adaptateur FFC 8 broches |
 
 ## Montage final
 
 | | |
 |---|---|
 | ![Montage ouvert](docs/photos/11-montage-ouvert.jpg) | ![Montage dans le boîtier](docs/photos/12-montage-dans-boitier.jpg) |
-| Carte de la télécommande et NodeMCU sur leur support imprimé. La nappe FFC relie le connecteur clavier à l'adaptateur FFC 8 broches, et les fils rouge et noir amènent le 3 V de l'ESP sur le support de pile, via un connecteur débrochable. | NodeMCU et adaptateur FFC dans le boîtier, prise micro‑USB accessible sur le côté. |
+| Carte de la télécommande et ESP‑Mx DevKit, monté sur le PCB maison. La nappe FFC relie le connecteur clavier à l'adaptateur FFC 8 broches, et les fils rouge et noir amènent le 3 V de l'ESP sur le support de pile, via un connecteur débrochable. | ESP et adaptateur FFC dans le boîtier, prise micro‑USB accessible sur le côté. |
 | ![Boîtier fermé](docs/photos/13-boitier-ferme.jpg) | |
 | Boîtier imprimé en 3D, fermé et alimenté par USB. La LED est visible à travers le plastique. | |
 
@@ -119,6 +131,22 @@ Les fichiers STL du boîtier sont dans [`hardware/boitier/`](hardware/boitier/).
 | [`Body4.stl`](hardware/boitier/Body4.stl) | 53 × 53 × 1 | Plaque de support des cartes |
 
 GitHub affiche un aperçu 3D des fichiers STL quand on clique dessus.
+
+## Circuit imprimé
+
+Un petit PCB de 50 × 50 mm, dessiné sous EasyEDA (avril 2021) et fabriqué par JLCPCB, reçoit l'ESP‑Mx DevKit et l'adaptateur FFC. Il remplace le câblage volant entre les deux.
+
+| Dessus | Dessous (vu de dessous) |
+|---|---|
+| ![PCB, face dessus](hardware/pcb/pcb-dessus.png) | ![PCB, face dessous](hardware/pcb/pcb-dessous.png) |
+
+- **Face dessus** : sérigraphie de l'empreinte de l'ESP‑Mx DevKit (2 rangées de 12 broches) et du connecteur `8P` (2 × 4 broches) qui reçoit l'adaptateur FFC.
+- **Face dessous** : 6 pistes relient le connecteur `8P` aux GPIO 2, 4, 5, 12, 14 et 15, c'est‑à‑dire les 6 boutons pilotés par le firmware.
+- **Cotes** : rangées de l'ESP espacées de 25,4 mm, pas de 2,54 mm, trous de 1,0 mm pour l'ESP et de 0,889 mm pour le connecteur `8P`.
+
+Les fichiers Gerber sont dans [`hardware/pcb/gerber/`](hardware/pcb/gerber/). On peut les envoyer tels quels à un fabricant comme JLCPCB, en les zippant.
+
+> Le PCB fabriqué n'était pas tout à fait ajusté et il a fallu forcer un peu pour monter les composants. Avant de recommander une série, mesurez l'entraxe réel des rangées de votre carte ESP et la position du connecteur, puis corrigez l'empreinte si besoin.
 
 ## Logiciel
 
@@ -190,6 +218,11 @@ pio device monitor
 Le moniteur série (115200 bauds) affiche la liste des fichiers LittleFS puis l'adresse IP obtenue. La page est ensuite accessible à l'adresse `http://vmc/` (si votre routeur résout les noms d'hôte) ou `http://<adresse-ip>/`. Il est conseillé de réserver une adresse IP fixe pour l'ESP dans le routeur, surtout pour Home Assistant.
 
 ## Utilisation
+
+| | |
+|---|---|
+| ![Interface sur smartphone, mode Medium](docs/screenshots/mobile-medium.png) | ![Interface sur smartphone, mode Max 30 min](docs/screenshots/mobile-max30.png) |
+| Au démarrage, l'ESP envoie Medium | Après un appui sur « Max 30 min » |
 
 La page affiche le mode courant (rafraîchi toutes les 2 secondes) et huit boutons :
 
@@ -281,3 +314,7 @@ Résumé du manuel Orcon MVS‑15RH, utile pour comprendre les commandes :
 - Route d'appairage qui appuie en même temps sur `1` et `Auto`, pour éviter d'ouvrir le boîtier.
 - Petite authentification HTTP, si le réseau local n'est pas entièrement de confiance.
 - Ajouter un schéma de câblage, et le fichier source du boîtier (STEP ou Fusion 360) pour pouvoir le modifier.
+
+## Licence
+
+Ce projet (code, fichiers du boîtier et du PCB) est distribué sous licence [MIT](LICENSE). La feuille de style [Milligram](https://milligram.io/) incluse dans `data/` est elle aussi sous licence MIT.
