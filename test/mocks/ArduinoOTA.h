@@ -34,3 +34,45 @@ public:
   std::function<void()> startHandler;
 };
 extern FakeArduinoOTA ArduinoOTA;
+
+// Fake Updater (Update), used by the web update page: records what it
+// receives and lets a test make it fail.
+class FakeUpdate
+{
+public:
+  void runAsync(bool a) { async = a; }
+  bool begin(size_t size, int kind)
+  {
+    beginSize = size;
+    command = kind;
+    beginCount++;
+    if (failBegin)
+      error = true;
+    return !failBegin;
+  }
+  size_t write(uint8_t *, size_t len)
+  {
+    written += len;
+    return len;
+  }
+  bool end(bool)
+  {
+    finished = !error;
+    return finished;
+  }
+  bool hasError() { return error; }
+  bool isFinished() { return finished; }
+  String getErrorString() { return String("fake error"); }
+  template <typename T> void printError(T &) {}
+  void reset() { *this = FakeUpdate(); }
+
+  bool async = false;
+  size_t beginSize = 0;
+  int command = -1;
+  int beginCount = 0;
+  size_t written = 0;
+  bool finished = false;
+  bool error = false;
+  bool failBegin = false;
+};
+extern FakeUpdate Update;

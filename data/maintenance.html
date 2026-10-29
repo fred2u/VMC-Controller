@@ -57,6 +57,27 @@
             </div>
         </section>
 
+        <section class="group">
+            <h2>Update</h2>
+            <div class="card panel">
+                <div id="update-off">
+                    <p class="hint">The web update is built in only with a password: set <b>VMC_HTTP_PASSWORD</b> before building (see the README). PlatformIO over Wi-Fi still works.</p>
+                </div>
+                <form id="update" hidden>
+                    <p>Send a <b>firmware.bin</b> or a <b>littlefs.bin</b> (web interface) built by PlatformIO. The ESP restarts when it is done.</p>
+                    <div class="grid">
+                        <select id="update-kind" aria-label="What to update">
+                            <option value="firmware">Firmware</option>
+                            <option value="web">Web interface</option>
+                        </select>
+                        <input id="update-file" type="file" accept=".bin" aria-label="File">
+                    </div>
+                    <button type="submit">Update</button>
+                    <progress id="update-progress" max="100" value="0" hidden></progress>
+                </form>
+            </div>
+        </section>
+
         <p id="notice" class="notice" role="status"></p>
     </main>
 </body>

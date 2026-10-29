@@ -10,6 +10,7 @@ class DNSServer
 struct FakeWiFiManagerState
 {
   String apName;
+  String apPassword;
   unsigned long connectTimeout = 0;
   unsigned long portalTimeout = 0;
   int autoConnectCount = 0;
@@ -25,9 +26,10 @@ public:
   AsyncWiFiManager(AsyncWebServer *s, DNSServer *) : server(s) {}
   void setConnectTimeout(unsigned long seconds) { wifiManagerState.connectTimeout = seconds; }
   void setConfigPortalTimeout(unsigned long seconds) { wifiManagerState.portalTimeout = seconds; }
-  bool autoConnect(const char *apName)
+  bool autoConnect(const char *apName, const char *apPassword = nullptr)
   {
     wifiManagerState.apName = apName;
+    wifiManagerState.apPassword = apPassword ? apPassword : "";
     wifiManagerState.autoConnectCount++;
     wifiManagerState.routesBeforeAutoConnect = server->routes.size();
     // The real portal registers its own pages, then clears the server.

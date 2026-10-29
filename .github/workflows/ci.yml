@@ -34,9 +34,13 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install platformio
-      # Dummy OTA password, so the OTA code is built and counted in the size.
+      # Dummy passwords, so the OTA and password code is built and counted in
+      # the size. The production board gets every option (largest firmware),
+      # the test board none of the optional ones, so both variants build.
       - run: pio run -e ${{ matrix.env }}
         env:
           VMC_OTA_PASSWORD: ci-dummy-password
+          VMC_HTTP_PASSWORD: ${{ matrix.env == 'espmxdevkit' && 'ci-dummy-password' || '' }}
+          VMC_SETUP_PASSWORD: ${{ matrix.env == 'espmxdevkit' && 'ci-dummy-password' || '' }}
       # Check that the data/ folder still packs into a LittleFS image.
       - run: pio run -e ${{ matrix.env }} --target buildfs

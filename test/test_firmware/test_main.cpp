@@ -16,6 +16,9 @@ FakeESP ESP;
 FakeWiFi WiFi;
 FakeLittleFS LittleFS;
 FakeArduinoOTA ArduinoOTA;
+FakeUpdate Update;
+String fakeAuthUser;
+String fakeAuthPassword;
 FakeWiFiManagerState wifiManagerState;
 
 namespace fake
@@ -55,8 +58,12 @@ void delay(unsigned long ms)
 unsigned long millis() { return (uint32_t)fake::nowMillis; }
 
 // ----- the firmware under test (unchanged) ---------------------------------
-// On the ESP, scripts/ota_password.py sets this from VMC_OTA_PASSWORD.
+// On the ESP, scripts/passwords.py sets this from VMC_OTA_PASSWORD.
 #define OTA_PASSWORD "test-ota-password"
+// On the ESP, scripts/passwords.py sets these from VMC_HTTP_PASSWORD and
+// VMC_SETUP_PASSWORD.
+#define HTTP_PASSWORD "test-http-password"
+#define SETUP_PASSWORD "test-setup-password"
 // On the ESP, scripts/version.py sets this from the Git tags.
 #define VMC_VERSION "v9.9-test"
 #include "../../src/main.cpp"
@@ -84,6 +91,11 @@ static void boot(const char *savedSsid = "", bool wifiConnects = true)
   ESP = FakeESP();
   otaStarted = false;
   ArduinoOTA.reset();
+  Update.reset();
+  updateRefused = false;
+  // Every request carries the right password, unless a test changes it.
+  fakeAuthUser = "admin";
+  fakeAuthPassword = "test-http-password";
   WiFi = FakeWiFi();
   WiFi.savedSsid = savedSsid;
   wifiManagerState.reset();
@@ -536,7 +548,7 @@ void test_info_answers_version_hostname_ip_and_signal_as_json()
   TEST_ASSERT_EQUAL_STRING(
       "{\"version\":\"v9.9-test\",\"hostname\":\"vmc\","
       "\"ip\":\"192.168.1.42\",\"rssi\":-61,\"ssid\":\"home-network\","
-      "\"uptime\":3,\"heap\":31000,\"reset\":\"Power On\"}",
+      "\"uptime\":3,\"heap\":31000,\"reset\":\"Power On\",\"update\":true}",
       r.content.c_str());
   TEST_ASSERT_EQUAL(0, pressCountOnButtons());
 }
@@ -662,6 +674,99 @@ void test_maintenance_page_is_served_from_littlefs()
   TEST_ASSERT_EQUAL_STRING("text/javascript", r.contentType.c_str());
 }
 
+// ----- password and web update -------------------------------------------
+
+void test_every_route_asks_for_the_password()
+{
+  const char *getUrls[] = {"/", "/index.html", "/script.js", "/style.css", "/maintenance",
+                           "/maintenance.js", "/low", "/max1", "/mode", "/version", "/info"};
+  const char *postUrls[] = {"/pair", "/reset-remote", "/restart", "/forget-wifi"};
+  fakeAuthPassword = "";
+  for (const char *url : getUrls)
+    TEST_ASSERT_EQUAL_MESSAGE(401, webServer.request(url).status, url);
+  for (const char *url : postUrls)
+    TEST_ASSERT_EQUAL_MESSAGE(401, webServer.request(url, HTTP_POST).status, url);
+  runFor(10000);
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+  TEST_ASSERT_EQUAL(0, ESP.restartCount);
+}
+
+void test_a_wrong_password_or_user_is_refused()
+{
+  fakeAuthPassword = "wrong";
+  TEST_ASSERT_EQUAL(401, webServer.request("/high").status);
+  fakeAuthUser = "root";
+  fakeAuthPassword = "test-http-password";
+  TEST_ASSERT_EQUAL(401, webServer.request("/high").status);
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(0, pressCountOnButtons());
+}
+
+void test_the_right_password_lets_commands_through()
+{
+  TEST_ASSERT_EQUAL(200, webServer.request("/high").status);
+  runUntilIdle();
+  TEST_ASSERT_EQUAL(1, pressCount(PIN_HIGH));
+}
+
+void test_setup_access_point_uses_its_password()
+{
+  boot();
+  TEST_ASSERT_EQUAL_STRING("test-setup-password", wifiManagerState.apPassword.c_str());
+}
+
+void test_firmware_update_writes_the_file_then_restarts()
+{
+  AsyncWebServerRequest r = webServer.upload("/update/firmware", 4, 1024);
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL(1, Update.beginCount);
+  TEST_ASSERT_EQUAL(U_FLASH, Update.command);
+  TEST_ASSERT_EQUAL(0x80000, (long)Update.beginSize);
+  TEST_ASSERT_TRUE(Update.async);
+  TEST_ASSERT_EQUAL(4096, (long)Update.written);
+  TEST_ASSERT_TRUE(Update.isFinished());
+  TEST_ASSERT_TRUE(LittleFS.mounted);
+  runFor(1100);
+  TEST_ASSERT_EQUAL(1, ESP.restartCount);
+}
+
+void test_web_interface_update_replaces_littlefs()
+{
+  AsyncWebServerRequest r = webServer.upload("/update/web", 2, 512);
+  TEST_ASSERT_EQUAL(200, r.status);
+  TEST_ASSERT_EQUAL(U_FS, Update.command);
+  TEST_ASSERT_EQUAL(65536, (long)Update.beginSize);
+  TEST_ASSERT_FALSE(LittleFS.mounted);
+  TEST_ASSERT_EQUAL(1024, (long)Update.written);
+}
+
+void test_update_without_the_password_writes_nothing()
+{
+  fakeAuthPassword = "";
+  AsyncWebServerRequest r = webServer.upload("/update/firmware", 3, 1024);
+  TEST_ASSERT_EQUAL(401, r.status);
+  TEST_ASSERT_EQUAL(0, Update.beginCount);
+  TEST_ASSERT_EQUAL(0, (long)Update.written);
+  runFor(2000);
+  TEST_ASSERT_EQUAL(0, ESP.restartCount);
+}
+
+void test_a_failed_update_answers_500_and_does_not_restart()
+{
+  Update.failBegin = true;
+  AsyncWebServerRequest r = webServer.upload("/update/firmware", 2, 1024);
+  TEST_ASSERT_EQUAL(500, r.status);
+  TEST_ASSERT_EQUAL_STRING("Update failed: fake error", r.content.c_str());
+  TEST_ASSERT_EQUAL(0, (long)Update.written);
+  runFor(2000);
+  TEST_ASSERT_EQUAL(0, ESP.restartCount);
+}
+
+void test_update_needs_post()
+{
+  TEST_ASSERT_EQUAL(404, webServer.request("/update/firmware").status);
+}
+
 // ----- updates over Wi-Fi (OTA) -------------------------------------------
 
 void test_ota_waits_for_the_wifi_connection()
@@ -759,6 +864,15 @@ int main(int, char **)
   RUN_TEST(test_forget_wifi_erases_the_network_then_restarts);
   RUN_TEST(test_uptime_keeps_counting_after_the_millis_wraparound);
   RUN_TEST(test_maintenance_page_is_served_from_littlefs);
+  RUN_TEST(test_every_route_asks_for_the_password);
+  RUN_TEST(test_a_wrong_password_or_user_is_refused);
+  RUN_TEST(test_the_right_password_lets_commands_through);
+  RUN_TEST(test_setup_access_point_uses_its_password);
+  RUN_TEST(test_firmware_update_writes_the_file_then_restarts);
+  RUN_TEST(test_web_interface_update_replaces_littlefs);
+  RUN_TEST(test_update_without_the_password_writes_nothing);
+  RUN_TEST(test_a_failed_update_answers_500_and_does_not_restart);
+  RUN_TEST(test_update_needs_post);
   RUN_TEST(test_ota_waits_for_the_wifi_connection);
   RUN_TEST(test_ota_starts_once_with_hostname_and_password_when_wifi_is_up);
   RUN_TEST(test_ota_is_handled_on_every_loop_even_without_a_command);

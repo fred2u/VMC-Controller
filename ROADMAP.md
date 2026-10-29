@@ -82,11 +82,11 @@ GPIO2 and GPIO15 are also used to select the ESP8266 boot mode. If the remote's 
 Still to do:
 
 - Erase the saved network with the factory reset button (see "Factory reset" above). ✅ From the maintenance page: **Forget Wi‑Fi**.
-- Optionally protect the `VMC-Setup` access point with a password.
+- ✅ ~~Optionally protect the `VMC-Setup` access point with a password.~~ `VMC_SETUP_PASSWORD` at build time.
 
 ### ✅ Updates over Wi‑Fi (OTA)
 
-~~Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.~~ ArduinoOTA is in place, protected by a password (`VMC_OTA_PASSWORD`), see the README. A web update page (`/update`) could still be added, to update without PlatformIO.
+~~Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.~~ ArduinoOTA is in place, protected by a password (`VMC_OTA_PASSWORD`), see the README. ✅ A web update (Maintenance page, `/update/firmware` and `/update/web`) updates without PlatformIO, when the firmware is built with `VMC_HTTP_PASSWORD`.
 
 ### 🟠 Native Home Assistant integration
 
@@ -105,9 +105,11 @@ The mode shown is the one from the last command sent by the ESP, and it is not r
 
 ✅ The interface now shows "Last mode sent" instead of "Current mode". The limitation itself remains.
 
-### 🟢 Security
+### ✅ Security
 
-There is no authentication. That is acceptable on a trusted local network, but there should at least be optional HTTP basic authentication, especially if OTA is added, since OTA would allow the firmware to be replaced.
+✅ Optional authentication: with `VMC_HTTP_PASSWORD` at build time, every route asks for the user `admin` and that password (Basic or Digest), which Home Assistant's `rest_command` supports. The traffic stays plain HTTP.
+
+~~There is no authentication. That is acceptable on a trusted local network, but there should at least be optional HTTP basic authentication, especially if OTA is added, since OTA would allow the firmware to be replaced.~~
 
 ---
 
