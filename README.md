@@ -22,7 +22,7 @@ The original RF remote (Orcon 15RF) was taken apart: its keypad was replaced by 
 10. [Releases](#releases)
 11. [Usage](#usage)
 12. [HTTP API](#http-api)
-13. [Home Assistant integration](#home-assistant-integration)
+13. [Home Assistant integration](#home-assistant-integration) (`rest_command` or MQTT)
 14. [How the ventilation unit works](#how-the-ventilation-unit-works)
 15. [Troubleshooting](#troubleshooting)
 16. [Known limitations](#known-limitations)
@@ -331,6 +331,7 @@ The tests are built by the computer's own C++ compiler, not the ESP one. Linux a
 - that pages are served from LittleFS, that `/version` answers the built-in version, that `/info` answers the version, name, IP address and Wi‑Fi signal as JSON, and that an unknown URL answers `404`;
 - that the Wi‑Fi manager opens `VMC-Setup` with its timeouts, that no network is compiled into the firmware, that the web routes are added after the portal, and that without Wi‑Fi the ESP keeps retrying and still sends Medium;
 - that with a password every route answers `401` without it or with a wrong one, that the `VMC-Setup` access point gets its password, and that the web update writes the firmware or the web interface (unmounting LittleFS first), refuses a request without the password, answers `500` on a failed update, then restarts;
+- that MQTT connects once Wi‑Fi is up with its user, password and last will, announces the buttons and the mode sensor to Home Assistant, publishes the mode when it changes, runs the commands it receives (not the maintenance ones), and retries every 30 s without blocking the commands;
 - that OTA only starts once Wi‑Fi is connected, with the `vmc` name and the password, and that it unmounts LittleFS before a web interface update.
 
 The tests also run automatically on GitHub (*Actions* tab) on every push and pull request, together with a firmware build for both ESP boards (production and test).
@@ -492,6 +493,36 @@ sensor:
 ```
 
 Replace `vmc` with the ESP's IP address if your network does not resolve the hostname. With `VMC_HTTP_PASSWORD`, add the user and password to each command and to the sensor, for example `vmc_low: { url: "http://vmc/low", username: admin, password: !secret vmc_password }`, and `username`/`password` under the `rest` sensor. The commands can then be called from dashboard buttons or automations, for example "Max 30 min" when the bathroom humidity goes above a threshold.
+
+### MQTT and Home Assistant discovery
+
+Instead of `rest_command`, the ESP can talk to an MQTT broker (for example the Mosquitto add-on of Home Assistant). Home Assistant then finds a device named after the ESP (`vmc`) by itself, with one button per command and a **Mode** sensor, updated as soon as the mode changes, without polling.
+
+MQTT is built in only when the broker is given at build time (step 2 of the installation):
+
+```bash
+export VMC_MQTT_HOST="192.168.1.10"       # or the broker's name
+export VMC_MQTT_USER="vmc"                # if the broker asks for a user
+export VMC_MQTT_PASSWORD="mqtt-password"
+# export VMC_MQTT_PORT="1883"             # 1883 by default
+```
+
+```powershell
+$env:VMC_MQTT_HOST = "192.168.1.10"
+$env:VMC_MQTT_USER = "vmc"
+$env:VMC_MQTT_PASSWORD = "mqtt-password"
+```
+
+Topics, prefixed with the ESP's network name (`vmc`, or `vmc-test` for the test board):
+
+| Topic | Direction | Content |
+|---|---|---|
+| `vmc/command` | to the ESP | `default`, `auto`, `low`, `medium`, `high`, `max1`, `max2` or `max3` (same as the HTTP routes; Max in High is ignored) |
+| `vmc/mode` | from the ESP, retained | Last mode sent, as on `/mode` |
+| `vmc/status` | from the ESP, retained | `online`, or `offline` when the ESP disappears (last will) |
+| `homeassistant/button/vmc/<command>/config`, `homeassistant/sensor/vmc/mode/config` | from the ESP, retained | Home Assistant discovery |
+
+If the broker does not answer, the ESP tries again every 30 seconds; the web interface and the HTTP routes keep working. Pairing and remote reset stay on the Maintenance page. The HTTP routes and `rest_command` still work alongside MQTT.
 
 ## How the ventilation unit works
 

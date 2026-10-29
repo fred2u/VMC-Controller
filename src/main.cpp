@@ -5,6 +5,9 @@
 #include "LittleFS.h"
 #include <Updater.h>
 #include <flash_hal.h>
+#ifdef MQTT_HOST
+#include <PubSubClient.h>
+#endif
 
 // The Wi-Fi network is picked from the setup portal. Updates over Wi-Fi
 // need OTA_PASSWORD, set from the VMC_OTA_PASSWORD environment variable
@@ -26,6 +29,13 @@ const bool web_update = false;
 
 // Optional password for the VMC-Setup access point (VMC_SETUP_PASSWORD, at
 // least 8 characters). Without it, the access point is open.
+
+// Optional MQTT broker with Home Assistant discovery, from VMC_MQTT_HOST (and
+// VMC_MQTT_PORT, VMC_MQTT_USER, VMC_MQTT_PASSWORD) at build time. Without it,
+// no MQTT code is built in. See "MQTT and Home Assistant discovery" in the README.
+#ifndef MQTT_PORT
+#define MQTT_PORT 1883
+#endif
 
 // Name on the network (DHCP, http://vmc/, OTA as vmc.local). The test
 // board is built with another name (see platformio.ini) so that it can sit
@@ -125,6 +135,7 @@ void expireMaxMode();
 void pressButtons(const Command &c, uint8_t level);
 void updateUptime();
 void handleRestartRequest();
+void handleMQTT();
 void handleOTA();
 void setupWiFi();
 
@@ -246,6 +257,7 @@ void loop()
   expireMaxMode();
   runSender();
   handleRestartRequest();
+  handleMQTT();
 }
 
 // Sets the command to send next, in place of any command still waiting.
@@ -662,3 +674,124 @@ void handleOTA()
   ArduinoOTA.handle();
 #endif
 }
+
+// ----- MQTT and Home Assistant discovery -----------------------------------
+// Topics, with the network name as prefix (vmc/..., or vmc-test/... for the
+// test board):
+//   <name>/status   "online", or "offline" (last will) when the ESP is gone
+//   <name>/mode     last mode sent, as on /mode, retained
+//   <name>/command  "low", "max2"... : same commands as the HTTP routes
+// At each connection, the ESP announces a "VMC" device to Home Assistant
+// with one button per command and a mode sensor (retained discovery topics).
+
+#ifdef MQTT_HOST
+#ifndef MQTT_USER
+#define MQTT_USER nullptr
+#endif
+#ifndef MQTT_PASSWORD
+#define MQTT_PASSWORD nullptr
+#endif
+
+const unsigned long mqtt_retry_delay = 30000; // ms between two connection tries
+
+WiFiClient mqttWiFi;
+PubSubClient mqtt(mqttWiFi);
+bool mqttSetUp = false;
+bool mqttTried = false;
+uint32_t mqttLastTry = 0;
+int8_t mqttPublishedMode = -2; // nothing published yet
+
+String mqttTopic(const char *leaf)
+{
+  return String(VMC_HOSTNAME "/") + leaf;
+}
+
+// Mode commands only: pairing and remote reset stay on the maintenance page.
+void onMQTTMessage(char *topic, uint8_t *payload, unsigned int length)
+{
+  String url = "/";
+  for(unsigned int i = 0; i < length; i++)
+  {
+    url += (char)payload[i];
+  }
+  for(int8_t i = 0; i < first_remote_command; i++)
+  {
+    if(url == commands[i].url)
+    {
+      Serial.println("MQTT " + url);
+      requestCommand(i);
+      return;
+    }
+  }
+}
+
+// One button per command and a mode sensor, grouped in one device.
+void publishDiscovery()
+{
+  String device = String(",\"availability_topic\":\"") + mqttTopic("status") +
+                  "\",\"device\":{\"identifiers\":[\"" VMC_HOSTNAME "\"],\"name\":\"" VMC_HOSTNAME
+                  "\",\"manufacturer\":\"Orcon\",\"model\":\"VMC Controller\",\"sw_version\":\"" VMC_VERSION "\"}}";
+  for(int8_t i = 0; i < first_remote_command; i++)
+  {
+    const char *name = commands[i].url + 1; // "low"
+    String config = String("{\"name\":\"") + commands[i].mode +
+                    "\",\"unique_id\":\"" VMC_HOSTNAME "_" + name +
+                    "\",\"command_topic\":\"" + mqttTopic("command") +
+                    "\",\"payload_press\":\"" + name + "\"" + device;
+    mqtt.publish((String("homeassistant/button/" VMC_HOSTNAME "/") + name + "/config").c_str(),
+                 config.c_str(), true);
+  }
+  String config = String("{\"name\":\"Mode\",\"unique_id\":\"" VMC_HOSTNAME "_mode\",\"icon\":\"mdi:fan\",\"state_topic\":\"") +
+                  mqttTopic("mode") + "\"" + device;
+  mqtt.publish("homeassistant/sensor/" VMC_HOSTNAME "/mode/config", config.c_str(), true);
+}
+
+// Connects when Wi-Fi is up (retrying every 30 s if the broker does not
+// answer), then publishes the mode each time it changes.
+void handleMQTT()
+{
+  if(!mqttSetUp)
+  {
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+    mqtt.setCallback(onMQTTMessage);
+    mqtt.setBufferSize(512);
+    mqttSetUp = true;
+  }
+  if(WiFi.status() != WL_CONNECTED)
+  {
+    return;
+  }
+  if(!mqtt.connected())
+  {
+    if(mqttTried && millis() - mqttLastTry < mqtt_retry_delay)
+    {
+      return;
+    }
+    mqttTried = true;
+    mqttLastTry = millis();
+    String status = mqttTopic("status");
+    if(!mqtt.connect(VMC_HOSTNAME, MQTT_USER, MQTT_PASSWORD, status.c_str(), 0, true, "offline"))
+    {
+      Serial.println("MQTT broker not reachable");
+      return;
+    }
+    Serial.println("MQTT connected");
+    mqtt.publish(status.c_str(), "online", true);
+    publishDiscovery();
+    mqtt.subscribe(mqttTopic("command").c_str());
+    mqttPublishedMode = -2;
+  }
+  mqtt.loop();
+
+  int8_t mode = maxMode != no_command ? maxMode : currentMode;
+  if(mode != mqttPublishedMode)
+  {
+    mqtt.publish(mqttTopic("mode").c_str(), mode == no_command ? "" : commands[mode].mode, true);
+    mqttPublishedMode = mode;
+  }
+}
+#else
+void handleMQTT()
+{
+}
+#endif

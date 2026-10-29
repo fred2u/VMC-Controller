@@ -42,5 +42,6 @@ jobs:
           VMC_OTA_PASSWORD: ci-dummy-password
           VMC_HTTP_PASSWORD: ${{ matrix.env == 'espmxdevkit' && 'ci-dummy-password' || '' }}
           VMC_SETUP_PASSWORD: ${{ matrix.env == 'espmxdevkit' && 'ci-dummy-password' || '' }}
+          VMC_MQTT_HOST: ${{ matrix.env == 'espmxdevkit' && 'broker.example' || '' }}
       # Check that the data/ folder still packs into a LittleFS image.
       - run: pio run -e ${{ matrix.env }} --target buildfs

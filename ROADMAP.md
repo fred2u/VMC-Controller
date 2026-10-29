@@ -88,9 +88,11 @@ Still to do:
 
 ~~Add ArduinoOTA or a web update page (`/update`), to update the firmware and the interface without opening the enclosure or plugging in a cable.~~ ArduinoOTA is in place, protected by a password (`VMC_OTA_PASSWORD`), see the README. ✅ A web update (Maintenance page, `/update/firmware` and `/update/web`) updates without PlatformIO, when the firmware is built with `VMC_HTTP_PASSWORD`.
 
-### 🟠 Native Home Assistant integration
+### ✅ Native Home Assistant integration
 
 Today, the integration goes through a manual `rest_command` configuration. An MQTT integration with Home Assistant auto-discovery would directly create a "VMC" device with its buttons and a mode sensor. It would also give the state without polling `/mode` over and over.
+
+✅ Done, optional: built with `VMC_MQTT_HOST`, the ESP connects to the broker and announces a device with one button per command and a mode sensor (MQTT discovery), see "MQTT and Home Assistant discovery" in the README.
 
 ### ✅ Command reliability
 
