@@ -4,7 +4,7 @@ Wi‑Fi remote control for an **Orcon MVS‑15RH** ventilation unit (MVHR/extrac
 
 The original RF remote (Orcon 15RF) was taken apart: its keypad was replaced by an ESP8266 that "presses" the buttons instead. The ventilation unit can then be controlled from a smartphone (web page on the local network) and from Home Assistant, without touching the unit itself or the radio protocol.
 
-> Personal project, meant for a private local network. The interface has **no authentication**: do not expose it to the Internet.
+> Personal project, meant for a private local network. The web interface has no password unless one is set at build time (`VMC_HTTP_PASSWORD`), and the traffic is plain HTTP either way: do not expose it to the Internet.
 
 ---
 
@@ -36,7 +36,7 @@ The original RF remote (Orcon 15RF) was taken apart: its keypad was replaced by 
 ```mermaid
 flowchart LR
     phone["📱 Smartphone<br/>web browser"]
-    ha["🏠 Home Assistant<br/>rest_command"]
+    ha["🏠 Home Assistant<br/>rest_command or MQTT"]
     usb["🔌 5 V USB charger"]
 
     subgraph box["3D-printed enclosure"]
@@ -47,14 +47,14 @@ flowchart LR
     vmc["🌀 Orcon MVS-15RH ventilation unit"]
 
     phone -- "HTTP, local Wi-Fi" --> esp
-    ha -- "HTTP, local Wi-Fi" --> esp
+    ha -- "HTTP or MQTT, local Wi-Fi" --> esp
     usb -- "5 V" --> esp
     esp -- "6 GPIOs over FFC cable<br/>500 ms pulses" --> remote
     esp -. "3 V instead of the battery" .-> remote
     remote -- "RF radio" --> vmc
 ```
 
-- The ESP8266 connects to the home Wi‑Fi and serves a small web page.
+- The ESP8266 connects to the home Wi‑Fi and serves a small web page. Home Assistant drives it over HTTP (`rest_command`) or, optionally, MQTT.
 - Each button on the page matches a button on the remote. The ESP pulls the matching output LOW for 500 ms, which simulates a press.
 - The remote board then sends the radio command to the ventilation unit, as if the button had been pressed.
 - The ESP powers the remote board from its 3 V output, instead of the battery. The ESP itself is powered by a USB charger.
@@ -174,17 +174,18 @@ The Gerber files are in [`hardware/pcb/gerber/`](hardware/pcb/gerber/). They can
 | Framework | Arduino for ESP8266 (`espressif8266`) |
 | Web server | [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) and [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP), maintained by ESP32Async, versions pinned in `platformio.ini` |
 | Wi‑Fi setup | [ESPAsyncWiFiManager](https://github.com/alanswx/ESPAsyncWiFiManager) (captive portal on the same async web server) |
-| Updates over Wi‑Fi | ArduinoOTA (included in the Arduino core) |
+| Updates over Wi‑Fi | ArduinoOTA (included in the Arduino core), and an optional web update page |
+| MQTT (optional) | [PubSubClient](https://github.com/knolleary/pubsubclient), with Home Assistant discovery |
 | File system | LittleFS (web pages stored in flash) |
-| Interface | Plain HTML, CSS and JavaScript, no framework (about 11 KB, light and dark themes) |
+| Interface | Plain HTML, CSS and JavaScript, no framework (about 20 KB for both pages, light and dark themes) |
 
 Layout:
 
 ```
-├── platformio.ini       PlatformIO configuration (board, libraries, LittleFS)
-├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control
+├── platformio.ini       PlatformIO configuration (boards, libraries, LittleFS)
+├── src/main.cpp         Firmware: Wi‑Fi, web server, GPIO control, OTA, MQTT
 ├── scripts/
-│   ├── passwords.py     Reads the passwords from VMC_OTA_PASSWORD, VMC_HTTP_PASSWORD, VMC_SETUP_PASSWORD
+│   ├── passwords.py     Reads the passwords and the MQTT settings from the VMC_* environment variables
 │   ├── ota_auth.py      Gives that password to uploads over Wi‑Fi
 │   └── version.py       Builds the version from the Git tags into the firmware
 └── data/                Files uploaded to LittleFS
@@ -193,6 +194,10 @@ Layout:
     ├── maintenance.html Maintenance page: pairing, remote reset, restart, Wi‑Fi
     ├── maintenance.js   Sends the maintenance actions, shows the ESP details
     └── style.css        Layout and light/dark themes (both pages)
+test/                    Unit tests run on the computer (see Tests), with fake libraries in test/mocks/
+docs/                    Photos of the build and screenshots of the interface
+hardware/                Enclosure STL files and PCB Gerber files
+.github/workflows/ci.yml Tests and firmware builds on GitHub
 ```
 
 How the firmware works (`src/main.cpp`):
@@ -260,13 +265,13 @@ Repeat this step every time a file in the `data/` folder changes.
 
 ### 5. Connect to Wi‑Fi
 
-When the ESP has no network saved, or cannot reach it within 30 seconds, it opens its own Wi‑Fi access point named **`VMC-Setup`** (no password):
+When the ESP has no network saved, or cannot reach it within 30 seconds, it opens its own Wi‑Fi access point named **`VMC-Setup`** (open, or protected by `VMC_SETUP_PASSWORD` if it was set at build time):
 
 1. Connect a phone or a computer to `VMC-Setup`. The setup page usually opens by itself; if not, open `http://192.168.4.1/`.
 2. Choose **Configure WiFi**, pick your network in the list and enter its password, then save.
 3. The ESP joins the network, saves it in flash and closes the access point. The next boots connect directly.
 
-The portal stays open 3 minutes. Meanwhile, the ESP keeps retrying the saved network every few seconds: after a power cut, when the router takes longer to start than the ESP, it connects as soon as the router is back. If nobody uses the portal, it closes and the ESP keeps retrying the saved network in the background. The ventilation commands only start once the portal has closed. To pick another network later, change it while the old one is unreachable, or erase the flash (`pio run --target erase`, then flash again).
+The portal stays open 3 minutes. Meanwhile, the ESP keeps retrying the saved network every few seconds: after a power cut, when the router takes longer to start than the ESP, it connects as soon as the router is back. If nobody uses the portal, it closes and the ESP keeps retrying the saved network in the background. The ventilation commands only start once the portal has closed. To pick another network later, use **Forget Wi‑Fi** on the [Maintenance page](#usage): the ESP restarts and opens `VMC-Setup`. If the page cannot be reached at all, erase the flash over USB (`pio run --target erase`, then flash and `uploadfs` again).
 
 Check with the serial monitor:
 
@@ -302,7 +307,7 @@ With `VMC_OTA_PASSWORD` set, `scripts/ota_auth.py` gives the password to the upl
 
 The computer must be on the same network, and its firewall must let the ESP connect back to it (espota uses a random TCP port; on Windows, allow Python when the firewall asks).
 
-The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 11 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB. With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
+The production board (ESP‑Mx DevKit) only has 1 MB of flash. An update over Wi‑Fi needs room for the old and the new firmware at the same time, so `platformio.ini` keeps only 64 KB for LittleFS (the web interface is about 20 KB), which leaves about 470 KB for each firmware. The current firmware is about 400 KB, a little over 410 KB with every option (passwords and MQTT). With the default 256 KB for LittleFS, the limit would be about 380 KB and the ESP would refuse the update. The NodeMCU (4 MB) has plenty of room.
 
 #### From the web page, without PlatformIO
 
@@ -320,7 +325,7 @@ pio test -e native
 
 The tests are built by the computer's own C++ compiler, not the ESP one. Linux and macOS usually have it already (`g++` or `clang`). On Windows, install a MinGW-w64 `gcc`/`g++`, for example [WinLibs](https://winlibs.com/), add its `bin` folder to the PATH, then open a new PlatformIO terminal: `g++ --version` must answer.
 
-`src/main.cpp` is compiled **as is**: the tests only replace the Arduino, Wi‑Fi, LittleFS and web server libraries with fakes (folder `test/mocks/`). These fakes record every pin change and every pause, which makes it possible to check, for example:
+`src/main.cpp` is compiled **as is**: the tests only replace the Arduino, Wi‑Fi, Wi‑Fi manager, LittleFS, web server, OTA, update and MQTT libraries with fakes (folder `test/mocks/`). These fakes record every pin change and every pause, which makes it possible to check, for example:
 
 - that at boot all pins are outputs and released, then that Medium is sent;
 - that each URL presses the right button, with a 500 ms pulse and the LED on while sending, and answers the mode it sets;
@@ -396,20 +401,20 @@ To publish a version:
 
 3. Get the tag on the computer (`git pull --tags`), then build and flash: the ESP now shows `v1.1`.
 
-Numbers follow `vMAJOR.MINOR`: increase `MINOR` for a new feature or a fix, and `MAJOR` for a change that needs a USB flash or a new wiring. The web interface (LittleFS) has no version of its own: upload it again (`uploadfs`) with each release.
+Each version is described in [CHANGELOG.md](CHANGELOG.md): add its section before tagging. Numbers follow `vMAJOR.MINOR`: increase `MINOR` for a new feature or a fix, and `MAJOR` for a change that needs a USB flash or a new wiring. The web interface (LittleFS) has no version of its own: upload it again (`uploadfs`) with each release.
 
 ## Usage
 
-| | | |
-|---|---|---|
-| ![Interface on a smartphone, Medium mode](docs/screenshots/mobile-medium.png) | ![Interface on a smartphone in dark theme, Max 30 min mode](docs/screenshots/mobile-max30-dark.png) | ![Interface on a smartphone, ESP unreachable](docs/screenshots/mobile-offline.png) |
-| At boot, the ESP sends Medium | After pressing "Max 30 min" (dark theme) | ESP unreachable |
+| | | | |
+|---|---|---|---|
+| ![Interface on a smartphone, Medium mode](docs/screenshots/mobile-medium.png) | ![Interface on a smartphone in dark theme, Max 30 min mode](docs/screenshots/mobile-max30-dark.png) | ![Interface on a smartphone, ESP unreachable](docs/screenshots/mobile-offline.png) | ![Maintenance page](docs/screenshots/mobile-maintenance.png) |
+| At boot, the ESP sends Medium | After pressing "Max 30 min" (dark theme) | ESP unreachable | Maintenance page |
 
 The page follows the phone's light or dark theme. It shows:
 
 - the last mode sent, refreshed every 2 seconds, with the matching button highlighted and a fan that turns faster with the speed;
 - an **Online** / **Offline** badge: after two refreshes without an answer (3 s each), the page says **Offline** and greys out the buttons, then comes back on its own;
-- the eight buttons below, grouped by Speed, Program and Max. The Max buttons are greyed out while in High, since the firmware ignores them there;
+- the eight buttons below, grouped by Speed, Program and Max. The Max buttons are greyed out while in High, since the firmware refuses them there;
 - at the bottom, the firmware version, the IP address, the network name and the Wi‑Fi signal of the ESP (from `/info`), and a link to the **Maintenance** page.
 
 The **Maintenance** page (`http://vmc/maintenance`) gathers what is rarely needed:
@@ -457,7 +462,7 @@ The routes are on port 80. With `VMC_HTTP_PASSWORD`, every route asks for the us
 | `/maintenance` | HTML page | Maintenance page |
 | `/update/firmware`, `/update/web` | `POST` (file upload), `200` or `500` | Web update of the firmware or of the web interface, then restart. Only with `VMC_HTTP_PASSWORD` |
 | `/version` | `text/plain` | Firmware version, for example `v1.1` (see [Releases](#releases)) |
-| `/info` | `application/json` | Board details: `{"version":"v1.2","hostname":"vmc","ip":"192.168.1.42","rssi":-61,"ssid":"home","uptime":3600,"heap":31000,"reset":"Power On"}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak; `uptime` is in seconds since the last start, `heap` the free memory in bytes, `reset` the reason of the last start) |
+| `/info` | `application/json` | Board details: `{"version":"v1.2","hostname":"vmc","ip":"192.168.1.42","rssi":-61,"ssid":"home","uptime":3600,"heap":31000,"reset":"Power On","update":true}` (`rssi` is the Wi‑Fi signal in dBm: around -50 is very good, below -80 is weak; `uptime` is in seconds since the last start, `heap` the free memory in bytes, `reset` the reason of the last start, `update` whether the web update page is built in) |
 
 A command answers right away with the mode it sets, and the ESP presses the button just after. A Max command in High mode answers `409` with `Max is ignored in High mode` and presses nothing. A command received while another one is being sent (up to about 3 seconds for Max 60 min) waits for it to finish; if several arrive meanwhile, only the last one is sent. Example:
 
@@ -543,8 +548,8 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 |---|---|
 | The page at `http://vmc/` does not open | Try `http://<ip-address>/` with the address from the serial monitor: some routers do not resolve the `vmc` hostname. If it opens on the test board instead, that board was built with the name `vmc`: see [Test board](#test-board-nodemcu). |
 | `Connection established` never shows | The Wi‑Fi network or password has changed (new Internet box, for example). Restart the ESP: it cannot reach the old network, so it opens the `VMC-Setup` portal for 3 minutes, see [Connect to Wi‑Fi](#5-connect-to-wifi). |
-| The `VMC-Setup` access point does not show | The ESP reached its saved network, or the 3 minutes are over: restart it. To force the portal while the old network still works, erase the flash (`pio run --target erase`) and flash again. |
-| The page is blank or returns an error, but `/mode` answers | The LittleFS file list is empty in the serial monitor: upload the interface with `pio run --target uploadfs`. |
+| The `VMC-Setup` access point does not show | The ESP reached its saved network, or the 3 minutes are over: restart it. To force the portal while the old network still works, use **Forget Wi‑Fi** on the Maintenance page. |
+| The page is blank or returns an error, but `/mode` answers | The LittleFS file list is empty in the serial monitor: upload the interface with `pio run -e espmxdevkit --target uploadfs`. |
 | An upload over Wi‑Fi fails with `could not open port '...'` | PlatformIO took the name for a serial port. Use the `_ota` environment (`-e nodemcuv2_ota` or `-e espmxdevkit_ota`), see [Updates over Wi‑Fi](#6-updates-over-wifi-ota). |
 | The ESP does not start after a wiring change | Check GPIO2 (must be HIGH at boot) and GPIO15 (must be LOW at boot), see [Wiring](#wiring). |
 | The ESP LED (GPIO16) lights up during a command, but the ventilation unit does not react | Check the FFC cable and breakout, and the 3 V power to the remote's battery holder. If the remote board is powered and connected, it may no longer be paired (after replacing or resetting the unit, for example): pair it again, see [How the ventilation unit works](#how-the-ventilation-unit-works). |
@@ -560,7 +565,7 @@ Start with the serial monitor (`pio device monitor`, 115200 baud, ESP connected 
 
 ## Ideas for improvement
 
-What the project is missing (pairing from the interface, reset button, Wi‑Fi setup, more compact version, MQTT…) is detailed in the [roadmap](ROADMAP.md).
+What the project is still missing (a reset button on the enclosure, a more compact PCB, a circuit diagram…) is detailed in the [roadmap](ROADMAP.md). What changed in each version is in the [changelog](CHANGELOG.md).
 
 ## License
 

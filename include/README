@@ -1,5 +1,5 @@
 Project header files (none today).
 
-The Wi-Fi network is chosen from the VMC-Setup portal and the OTA password
-comes from the VMC_OTA_PASSWORD environment variable, so no file holds a
-password. See the README.
+No file holds a password: the Wi-Fi network is chosen from the VMC-Setup
+portal, and the passwords and MQTT settings come from the VMC_*
+environment variables at build time (scripts/passwords.py). See the README.

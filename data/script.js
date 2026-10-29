@@ -58,8 +58,6 @@ function setOnline(online) {
 
 // Show the mode and highlight the matching button.
 function showMode(mode) {
-    // Firmware flashed before the switch to English still says "Automatique".
-    if (mode === "Automatique") mode = "Auto";
     $("mode").textContent = mode || "…";
     var isMax = mode.indexOf("Max") === 0;
     $("until").textContent = isMax ? "Then back to the previous mode" : "";
@@ -87,24 +85,16 @@ function getData() {
 function fill(id, value) { $(id).textContent = value || "unknown"; }
 
 // Board details, asked once (they only change on a new firmware or network).
-// Firmware older than /info only has /version.
 function getInfo() {
     get("info", function(status, text) {
-        if (status == 200) {
-            infoLoaded = true;
-            var info = {};
-            try { info = JSON.parse(text); } catch (e) {}
-            fill("version", info.version);
-            fill("ip", info.ip);
-            fill("hostname", info.hostname);
-            fill("rssi", info.rssi ? info.rssi + " dBm" : "");
-        } else if (status == 404) {
-            infoLoaded = true;
-            fill("ip", location.hostname);
-            fill("hostname", "");
-            fill("rssi", "");
-            get("version", function(s, t) { fill("version", s == 200 ? t : ""); });
-        }
+        if (status != 200) return;
+        infoLoaded = true;
+        var info = {};
+        try { info = JSON.parse(text); } catch (e) {}
+        fill("version", info.version);
+        fill("ip", info.ip);
+        fill("hostname", info.hostname);
+        fill("rssi", info.rssi ? info.rssi + " dBm" : "");
     });
 }
 

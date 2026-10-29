@@ -19,7 +19,8 @@
 // Optional password for the web interface and the HTTP routes, from the
 // VMC_HTTP_PASSWORD environment variable at build time (scripts/passwords.py).
 // The user name is always "admin". Without it, the routes are open, as on a
-// trusted home network, and the web update page (/update) is disabled.
+// trusted home network, and the web update (/update/firmware, /update/web)
+// is disabled.
 #define HTTP_USER "admin"
 #ifdef HTTP_PASSWORD
 const bool web_update = true;

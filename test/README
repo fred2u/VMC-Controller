@@ -3,7 +3,9 @@ Unit tests, run on the computer (no ESP needed):
     pio test -e native
 
 - test_firmware/test_main.cpp : the tests. It includes src/main.cpp unchanged.
-- mocks/ : fake Arduino, WiFi, LittleFS and ESP Async WebServer headers.
-  They record GPIO writes and delays, and let a test call a URL.
+- mocks/ : fake Arduino core, Wi-Fi, Wi-Fi manager, LittleFS, ESP Async
+  WebServer, ArduinoOTA, Updater and PubSubClient (MQTT) headers. They
+  record GPIO writes and delays, and let a test call a URL or send an
+  MQTT message.
 
 More info: https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
